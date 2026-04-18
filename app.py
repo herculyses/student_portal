@@ -854,11 +854,16 @@ def exams_page(student_id, subject):
     ).first_or_404()
 
     exams = {
+        # MIDTERM
         "midterm_exam": student.midterm_exam,
-        "final_exam": student.final_exam,
+        "midterm_laboratory_exam": student.midterm_laboratory_exam,
         "midterm_grade": student.midterm_grade,
-        "final_grade": student.final_grade,
         "midterm_remarks": student.midterm_remarks,
+
+        # FINAL
+        "final_exam": student.final_exam,
+        "final_laboratory_exam": student.final_laboratory_exam,
+        "final_grade": student.final_grade,
         "final_remarks": student.final_remarks
     }
 

@@ -12,7 +12,7 @@
     <span class="navbar-brand">Exams & Grades</span>
 
     <div class="d-flex gap-2">
-      
+
       <!-- Back to Subject Performance -->
       <a href="{{ url_for('subject_performance',
           student_id=student.student_id,
@@ -33,54 +33,61 @@
 
 <div class="container my-4">
 
-<div class="card shadow-sm">
-<div class="card-body">
+  <div class="card shadow-sm">
+    <div class="card-body">
 
-  <div class="mb-3">
-    <h5 class="mb-3">{{ student.name }}</h5>
-<small class="text-muted">Subject: {{ student.subject }}</small>
+      <div class="mb-3">
+        <h5 class="mb-3">{{ student.name }}</h5>
+        <small class="text-muted">Subject: {{ student.subject }}</small>
 
-<div class="table-responsive">
+        <div class="table-responsive">
 
-<table class="table table-bordered text-center">
+          <table class="table table-bordered text-center">
 
-  <thead class="table-dark">
-    <tr>
-      <th colspan="3" class="bg-primary">MIDTERM</th>
-      <th colspan="3" class="bg-success">FINAL</th>
-    </tr>
+            <thead class="table-dark">
+              <tr>
+                <th colspan="4" class="bg-primary">MIDTERM</th>
+                <th colspan="4" class="bg-success">FINAL</th>
+              </tr>
 
-    <tr>
-      <!-- MIDTERM -->
-      <th>Exam</th>
-      <th>Grade</th>
-      <th>Remarks</th>
+              <tr>
+                <!-- MIDTERM -->
+                <th>Exam</th>
+                <th>Lab Exam</th>
+                <th>Grade</th>
+                <th>Remarks</th>
 
-      <!-- FINAL -->
-      <th>Exam</th>
-      <th>Grade</th>
-      <th>Remarks</th>
-    </tr>
-  </thead>
+                <!-- FINAL -->
+                <th>Exam</th>
+                <th>Lab Exam</th>
+                <th>Grade</th>
+                <th>Remarks</th>
+              </tr>
+            </thead>
 
-  <tbody>
-    <tr>
-      <!-- MIDTERM -->
-      <td>{{ exams.midterm_exam or '-' }}</td>
-      <td>{{ exams.midterm_grade or '-' }}</td>
-      <td>{{ exams.midterm_remarks or '-' }}</td>
+            <tbody>
+              <tr>
+                <!-- MIDTERM -->
+                <td>{{ exams.midterm_exam or '-' }}</td>
+                <td>{{ exams.midterm_laboratory_exam or '-' }}</td>
+                <td>{{ exams.midterm_grade or '-' }}</td>
+                <td>{{ exams.midterm_remarks or '-' }}</td>
 
-      <!-- FINAL -->
-      <td>{{ exams.final_exam or '-' }}</td>
-      <td>{{ exams.final_grade or '-' }}</td>
-      <td>{{ exams.final_remarks or '-' }}</td>
-    </tr>
-  </tbody>
+                <!-- FINAL -->
+                <td>{{ exams.final_exam or '-' }}</td>
+                <td>{{ exams.final_laboratory_exam or '-' }}</td>
+                <td>{{ exams.final_grade or '-' }}</td>
+                <td>{{ exams.final_remarks or '-' }}</td>
+              </tr>
+            </tbody>
 
-</table>
+          </table>
 
-</div>
-</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
 
 </div>
 
