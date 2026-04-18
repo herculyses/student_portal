@@ -38,7 +38,7 @@
 
     <!-- LEFT -->
     <div>
-      {% if session.get('role') in ['Admin', 'Instructor'] %}
+      {% if session.get('role') in ['Admin', 'Instructor', 'Student'] %}
         <h1 class="welcome mb-1">
           {{ student_name or "Student" }}'s Dashboard
         </h1>
@@ -96,7 +96,7 @@
   <!-- GRADES -->
   {% if students %}
     <h2 class="mb-3">
-      {% if session.get('role') in ['Admin', 'Instructor'] %}
+      {% if session.get('role') in ['Admin', 'Instructor', 'Student'] %}
         {{ student_name }}'s Grades
       {% else %}
         Your Grades
@@ -128,7 +128,7 @@
               <td>{{ s.final_remarks or '-' }}</td>
 
               <td>
-                {% if session.get('role') in ['Admin', 'Instructor'] %}
+                {% if session.get('role') in ['Admin', 'Instructor', 'Student'] %}
                   <a href="{{ url_for('subject_performance',
                     student_id=s.student_id,
                     subject=s.subject | urlencode) }}"
