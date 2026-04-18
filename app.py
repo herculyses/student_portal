@@ -60,8 +60,9 @@ class User(db.Model):
 class Student(db.Model):
     __tablename__ = 'student'
     student_id = db.Column(db.String(100), primary_key=True)
-    subject = db.Column(db.String(100), primary_key=True)
     name = db.Column(db.String(150), nullable=False)
+    section = db.Column(db.String(50))
+    subject = db.Column(db.String(100), primary_key=True)
 
     # Attendance
     midterm_attendance1 = db.Column(db.String(10), default='0')
@@ -175,14 +176,21 @@ def get_dashboard_url():
     return url_for('login')
 
 def patch_update(obj, data_dict):
-    """
-    Only updates fields that are NOT empty.
-    Prevents overwriting existing values with blank/None.
-    """
     for key, value in data_dict.items():
         if hasattr(obj, key):
-            if value is not None and str(value).strip() != "":
-                setattr(obj, key, value)
+
+            if value is None:
+                continue
+
+            val = str(value).strip()
+
+            # CLEAR keyword → set to blank (NULL in DB)
+            if val.upper() == "CLEAR":
+                setattr(obj, key, None)
+
+            # normal update (includes 0)
+            elif val != "":
+                setattr(obj, key, val)
 
 def clean_input(value):
     return value if value not in [None, ""] else None
@@ -221,6 +229,7 @@ class CreateUserForm(FlaskForm):
 class StudentForm(FlaskForm):
     student_id = StringField('Student ID', validators=[DataRequired()])
     name = StringField('Name', validators=[DataRequired()])
+    section = StringField('Section', validators=[Optional()])
     subject = StringField('Subject', validators=[Optional()])
 
     # Attendance
@@ -878,6 +887,7 @@ def add_student():
             student_id=form.student_id.data,
             name=form.name.data,
             subject=form.subject.data,
+            section=form.section.data,
             midterm_quiz1=clean_input(form.midterm_quiz1),
             midterm_quiz2=clean_input(form.midterm_quiz2),
             midterm_quiz3=clean_input(form.midterm_quiz3),
@@ -963,6 +973,7 @@ def edit_student(student_id, subject):
         # Update core info
         student.student_id = new_student_id
         student.name = form.name.data.strip()
+        student.section = form.section.data.strip()
         student.subject = new_subject
 
         # Update quizzes
@@ -1251,6 +1262,7 @@ def upload_students():
                     try:
                         student_id = safe_str(row.get('student_id')).strip()
                         name = safe_str(row.get('name')).strip()
+                        section = safe_str(row.get('section')).strip()
                         subject = safe_str(row.get('subject')).strip().title()
 
                         if not student_id or not subject:
@@ -1268,6 +1280,9 @@ def upload_students():
 
                         # Prepare grade-related fields
                         field_updates = {
+
+                            # Section
+                            'section': section,   # ✅ ADD THIS
 
                             # Midterm Quizzes
                             'midterm_quiz1': row.get('midterm_quiz1'),
@@ -1359,6 +1374,7 @@ def upload_students():
                             create_kwargs = {
                                 'student_id': student_id.strip(),
                                 'name': name.strip(),
+                                'section': section.strip(),
                                 'subject': subject.strip().title()
                             }
                             for k, v in field_updates.items():
