@@ -1,0 +1,37 @@
+E:\USTP Files\My student_grade_portal\Program 44\
+│
+├── app.py                      # Main Flask app
+├── app.db                      # SQLite database (auto-created)
+│
+├── templates/                  # HTML templates
+│   ├── add_instructor.html
+│   ├── add_student.html
+│   ├── change_password.html
+│   ├── create_user.html
+│   ├── dashboard_admin.html
+│   ├── dashboard_instructor.html
+│   ├── dashboard_student.html
+│   ├── edit_instructor.html
+│   ├── edit_student.html
+│   ├── instructors.html
+│   ├── login.html
+│   ├── logs.html
+│   ├── student_grades.html
+│   ├── student_performance.html
+│   ├── students.html
+│   └── upload_students.html
+│
+├── static/                     # CSS, JS, images
+│   ├── css/
+│   │   ├── style.css
+│   │   └── student.css
+│   │
+│   └── js/
+│       ├── script.js
+│       └── student.js
+│
+├── uploads/                    # Uploaded CSV files (auto-created if missing)
+│
+├── requirements.txt            # Python dependencies
+├── Procfile                    # Startup command for Render/Railway
+└── runtime.txt                 # Python version (optional but recommended)
