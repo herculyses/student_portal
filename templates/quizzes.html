@@ -33,6 +33,17 @@
 <div class="card shadow-sm">
 <div class="card-body">
 
+{% macro score_input(name, value) %}
+  {% if session.get('role') in ['Admin', 'Instructor'] %}
+    <input name="{{ name }}" class="form-control form-control-sm text-center"
+           value="{{ value or '' }}">
+  {% else %}
+    <span class="form-control form-control-sm bg-light text-center">
+      {{ value or '-' }}
+    </span>
+  {% endif %}
+{% endmacro %}
+
 <!-- STUDENT HEADER -->
 <div class="mb-3">
   <h5 class="mb-0">{{ student.name }}</h5>
@@ -52,14 +63,17 @@
       <th>Quiz 4</th>
     </tr>
   </thead>
-  <tbody>
-    <tr>
-      <td>{{ student.midterm_quiz1 or '-' }}</td>
-      <td>{{ student.midterm_quiz2 or '-' }}</td>
-      <td>{{ student.midterm_quiz3 or '-' }}</td>
-      <td>{{ student.midterm_quiz4 or '-' }}</td>
-    </tr>
-  </tbody>
+
+<form method="POST">
+<tbody>
+<tr>
+<td>{{ score_input('midterm_quiz1', student.midterm_quiz1) }}</td>
+<td>{{ score_input('midterm_quiz2', student.midterm_quiz2) }}</td>
+<td>{{ score_input('midterm_quiz3', student.midterm_quiz3) }}</td>
+<td>{{ score_input('midterm_quiz4', student.midterm_quiz4) }}</td>
+</tr>
+</tbody>
+
 </table>
 
 <h6 class="mt-3 text-success">Exercise Quiz</h6>
@@ -72,14 +86,17 @@
       <th>Exercise Quiz 4</th>
     </tr>
   </thead>
-  <tbody>
-    <tr>
-      <td>{{ student.midterm_e_quiz1 or '-' }}</td>
-      <td>{{ student.midterm_e_quiz2 or '-' }}</td>
-      <td>{{ student.midterm_e_quiz3 or '-' }}</td>
-      <td>{{ student.midterm_e_quiz4 or '-' }}</td>
-    </tr>
-  </tbody>
+
+<form method="POST">
+<tbody>
+<tr>
+<td>{{ score_input('midterm_e_quiz1', student.midterm_e_quiz1) }}</td>
+<td>{{ score_input('midterm_e_quiz2', student.midterm_e_quiz2) }}</td>
+<td>{{ score_input('midterm_e_quiz3', student.midterm_e_quiz3) }}</td>
+<td>{{ score_input('midterm_e_quiz4', student.midterm_e_quiz4) }}</td>
+</tr>
+</tbody>
+
 </table>
 
 <h6 class="mt-3 text-warning">Laboratory Quiz</h6>
@@ -92,14 +109,17 @@
       <th>Lab Quiz 4</th>
     </tr>
   </thead>
-  <tbody>
-    <tr>
-      <td>{{ student.midterm_l_quiz1 or '-' }}</td>
-      <td>{{ student.midterm_l_quiz2 or '-' }}</td>
-      <td>{{ student.midterm_l_quiz3 or '-' }}</td>
-      <td>{{ student.midterm_l_quiz4 or '-' }}</td>
-    </tr>
-  </tbody>
+
+<form method="POST">
+<tbody>
+<tr>
+<td>{{ score_input('midterm_l_quiz1', student.midterm_l_quiz1) }}</td>
+<td>{{ score_input('midterm_l_quiz2', student.midterm_l_quiz2) }}</td>
+<td>{{ score_input('midterm_l_quiz3', student.midterm_l_quiz3) }}</td>
+<td>{{ score_input('midterm_l_quiz4', student.midterm_l_quiz4) }}</td>
+</tr>
+</tbody>
+
 </table>
 
 <hr>
@@ -117,14 +137,17 @@
       <th>Quiz 4</th>
     </tr>
   </thead>
-  <tbody>
-    <tr>
-      <td>{{ student.final_quiz1 or '-' }}</td>
-      <td>{{ student.final_quiz2 or '-' }}</td>
-      <td>{{ student.final_quiz3 or '-' }}</td>
-      <td>{{ student.final_quiz4 or '-' }}</td>
-    </tr>
-  </tbody>
+
+<form method="POST">
+<tbody>
+<tr>
+<td>{{ score_input('final_quiz1', student.final_quiz1) }}</td>
+<td>{{ score_input('final_quiz2', student.final_quiz2) }}</td>
+<td>{{ score_input('final_quiz3', student.final_quiz3) }}</td>
+<td>{{ score_input('final_quiz4', student.final_quiz4) }}</td>
+</tr>
+</tbody>
+
 </table>
 
 <h6 class="mt-3 text-success">Exercise Quiz</h6>
@@ -137,14 +160,17 @@
       <th>Exercise Quiz 4</th>
     </tr>
   </thead>
-  <tbody>
-    <tr>
-      <td>{{ student.final_e_quiz1 or '-' }}</td>
-      <td>{{ student.final_e_quiz2 or '-' }}</td>
-      <td>{{ student.final_e_quiz3 or '-' }}</td>
-      <td>{{ student.final_e_quiz4 or '-' }}</td>
-    </tr>
-  </tbody>
+
+<form method="POST">
+<tbody>
+<tr>
+<td>{{ score_input('final_e_quiz1', student.final_e_quiz1) }}</td>
+<td>{{ score_input('final_e_quiz2', student.final_e_quiz2) }}</td>
+<td>{{ score_input('final_e_quiz3', student.final_e_quiz3) }}</td>
+<td>{{ score_input('final_e_quiz4', student.final_e_quiz4) }}</td>
+</tr>
+</tbody>
+
 </table>
 
 <h6 class="mt-3 text-warning">Laboratory Quiz</h6>
@@ -157,19 +183,75 @@
       <th>Lab Quiz 4</th>
     </tr>
   </thead>
-  <tbody>
-    <tr>
-      <td>{{ student.final_l_quiz1 or '-' }}</td>
-      <td>{{ student.final_l_quiz2 or '-' }}</td>
-      <td>{{ student.final_l_quiz3 or '-' }}</td>
-      <td>{{ student.final_l_quiz4 or '-' }}</td>
-    </tr>
-  </tbody>
+
+<form method="POST">
+<tbody>
+<tr>
+<td>{{ score_input('final_l_quiz1', student.final_l_quiz1) }}</td>
+<td>{{ score_input('final_l_quiz2', student.final_l_quiz2) }}</td>
+<td>{{ score_input('final_l_quiz3', student.final_l_quiz3) }}</td>
+<td>{{ score_input('final_l_quiz4', student.final_l_quiz4) }}</td>
+</tr>
+</tbody>
+
 </table>
 
+{% if session.get('role') in ['Admin', 'Instructor'] %}
+<div class="text-end mt-3">
+  <button type="submit" class="btn btn-success">
+    Save Quizzes
+  </button>
+</div>
+{% endif %}
+
 </div>
 </div>
 </div>
 
+{% if saved %}
+<div class="modal fade show" style="display:block; background:rgba(0,0,0,0.5);">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+
+      <div class="modal-header bg-success text-white">
+        <h5 class="modal-title">Success</h5>
+      </div>
+
+      <div class="modal-body">
+        Quizzes updated successfully!
+        <br><br>
+        What do you want to do next?
+      </div>
+
+      <div class="modal-footer">
+
+        <a href="{{ url_for('quizzes_page', student_id=student.student_id, subject=student.subject) }}"
+           class="btn btn-primary">
+          Stay
+        </a>
+
+        <a href="{{ url_for('subject_performance', student_id=student.student_id, subject=student.subject) }}"
+           class="btn btn-secondary">
+          Subject
+        </a>
+
+        <a href="{{ url_for('dashboard_student') }}"
+           class="btn btn-warning">
+          Dashboard
+        </a>
+
+        {% if session.get('role') == 'Admin' %}
+        <a href="{{ url_for('dashboard_admin') }}"
+           class="btn btn-danger">
+          Admin
+        </a>
+        {% endif %}
+
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endif %}
 </body>
 </html>

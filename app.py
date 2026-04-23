@@ -734,9 +734,10 @@ def subject_performance(student_id, subject):
         performance=performance
     )
 
-@app.route('/attendance/<student_id>/<subject>')
-@login_required(role=['Student','Admin','Instructor'])
+@app.route('/attendance/<student_id>/<subject>', methods=['GET', 'POST'])
+@login_required(role=['Admin','Instructor','Student'])
 def attendance_page(student_id, subject):
+
 
     subject = unquote(subject)
 
@@ -745,12 +746,46 @@ def attendance_page(student_id, subject):
         subject=subject
     ).first_or_404()
 
+    # 🔥 SAVE DATA (POST)
+    if request.method == 'POST':
+
+        # 🚫 BLOCK STUDENTS FROM EDITING
+        if session.get('role') not in ['Admin', 'Instructor']:
+            flash("Not allowed to edit.", "danger")
+            return redirect(request.url)
+
+        # UPDATE ATTENDANCE
+        student.midterm_attendance1 = request.form.get('midterm_attendance1')
+        student.midterm_attendance2 = request.form.get('midterm_attendance2')
+        student.midterm_attendance3 = request.form.get('midterm_attendance3')
+        student.midterm_attendance4 = request.form.get('midterm_attendance4')
+
+        student.final_attendance1 = request.form.get('final_attendance1')
+        student.final_attendance2 = request.form.get('final_attendance2')
+        student.final_attendance3 = request.form.get('final_attendance3')
+        student.final_attendance4 = request.form.get('final_attendance4')
+
+        db.session.commit()
+
+        flash("Attendance updated successfully!", "success")
+
+        return redirect(url_for(
+            'attendance_page',
+            student_id=student.student_id,
+            subject=student.subject,
+            saved=1
+        ))
+
+    # 🔵 GET REQUEST
+    saved = request.args.get('saved')
+
     return render_template(
         "attendance.html",
-        student=student
+        student=student,
+        saved=saved
     )
 
-@app.route('/quizzes/<student_id>/<subject>')
+@app.route('/quizzes/<student_id>/<subject>', methods=['GET', 'POST'])
 @login_required(role=['Student','Admin','Instructor'])
 def quizzes_page(student_id, subject):
 
@@ -761,9 +796,63 @@ def quizzes_page(student_id, subject):
         subject=subject
     ).first_or_404()
 
+    # 🔥 SAVE CHANGES
+    if request.method == 'POST':
+
+        # 🚫 only Admin / Instructor can edit
+        if session.get('role') not in ['Admin', 'Instructor']:
+            flash("Not allowed to edit quizzes.", "danger")
+            return redirect(request.url)
+
+        # MIDTERM QUIZZES
+        student.midterm_quiz1 = request.form.get('midterm_quiz1')
+        student.midterm_quiz2 = request.form.get('midterm_quiz2')
+        student.midterm_quiz3 = request.form.get('midterm_quiz3')
+        student.midterm_quiz4 = request.form.get('midterm_quiz4')
+
+        student.midterm_e_quiz1 = request.form.get('midterm_e_quiz1')
+        student.midterm_e_quiz2 = request.form.get('midterm_e_quiz2')
+        student.midterm_e_quiz3 = request.form.get('midterm_e_quiz3')
+        student.midterm_e_quiz4 = request.form.get('midterm_e_quiz4')
+
+        student.midterm_l_quiz1 = request.form.get('midterm_l_quiz1')
+        student.midterm_l_quiz2 = request.form.get('midterm_l_quiz2')
+        student.midterm_l_quiz3 = request.form.get('midterm_l_quiz3')
+        student.midterm_l_quiz4 = request.form.get('midterm_l_quiz4')
+
+        # FINAL QUIZZES
+        student.final_quiz1 = request.form.get('final_quiz1')
+        student.final_quiz2 = request.form.get('final_quiz2')
+        student.final_quiz3 = request.form.get('final_quiz3')
+        student.final_quiz4 = request.form.get('final_quiz4')
+
+        student.final_e_quiz1 = request.form.get('final_e_quiz1')
+        student.final_e_quiz2 = request.form.get('final_e_quiz2')
+        student.final_e_quiz3 = request.form.get('final_e_quiz3')
+        student.final_e_quiz4 = request.form.get('final_e_quiz4')
+
+        student.final_l_quiz1 = request.form.get('final_l_quiz1')
+        student.final_l_quiz2 = request.form.get('final_l_quiz2')
+        student.final_l_quiz3 = request.form.get('final_l_quiz3')
+        student.final_l_quiz4 = request.form.get('final_l_quiz4')
+
+        db.session.commit()
+
+        flash("Quizzes updated successfully!", "success")
+
+        return redirect(url_for(
+            'quizzes_page',
+            student_id=student.student_id,
+            subject=student.subject,
+            saved=1
+        ))
+
+    saved = request.args.get('saved')
+
     return render_template(
-        'quizzes.html',
-        student=student
+        "quizzes.html",
+        student=student,
+        saved=saved
     )
 
 @app.route('/pit/<student_id>/<subject>')
@@ -797,8 +886,8 @@ def pit_page(student_id, subject):
         pit=pit
     )
 
-@app.route('/report/<student_id>/<subject>')
-@login_required(role=['Student','Admin','Instructor'])
+@app.route('/report/<student_id>/<subject>', methods=['GET', 'POST'])
+@login_required(role=['Admin','Instructor','Student'])
 def report_page(student_id, subject):
 
     subject = unquote(subject)
@@ -808,9 +897,30 @@ def report_page(student_id, subject):
         subject=subject
     ).first_or_404()
 
+    if request.method == 'POST':
+
+        if session.get('role') not in ['Admin', 'Instructor']:
+            flash("Not allowed to edit.", "danger")
+            return redirect(request.url)
+
+        student.midterm_report1 = request.form.get('midterm_report1')
+        student.final_report1 = request.form.get('final_report1')
+
+        db.session.commit()
+
+        return redirect(url_for(
+            'report_page',
+            student_id=student.student_id,
+            subject=student.subject,
+            saved=1
+        ))
+
+    saved = request.args.get('saved')
+
     return render_template(
         "report.html",
-        student=student
+        student=student,
+        saved=saved
     )
 
 @app.route('/laboratory/<student_id>/<subject>')
@@ -875,7 +985,8 @@ def exercises_page(student_id, subject):
         exercises=exercises
     )
 
-@app.route('/exams/<student_id>/<subject>')
+@app.route('/exams/<student_id>/<subject>', methods=['GET', 'POST'])
+@login_required(role=['Admin', 'Instructor', 'Student'])
 def exams_page(student_id, subject):
 
     subject = unquote(subject)
@@ -885,14 +996,42 @@ def exams_page(student_id, subject):
         subject=subject
     ).first_or_404()
 
+    if request.method == 'POST':
+
+        if session.get('role') not in ['Admin', 'Instructor']:
+            flash("Not allowed to edit exams.", "danger")
+            return redirect(request.url)
+
+        student.midterm_exam = request.form.get('midterm_exam')
+        student.midterm_laboratory_exam = request.form.get('midterm_laboratory_exam')
+        student.midterm_grade = request.form.get('midterm_grade')
+        student.midterm_remarks = request.form.get('midterm_remarks')
+
+        student.final_exam = request.form.get('final_exam')
+        student.final_laboratory_exam = request.form.get('final_laboratory_exam')
+        student.final_grade = request.form.get('final_grade')
+        student.final_remarks = request.form.get('final_remarks')
+
+        db.session.commit()
+
+        flash("Exams updated successfully!", "success")
+
+        return redirect(url_for(
+            'exams_page',
+            student_id=student.student_id,
+            subject=student.subject,
+            saved=1
+        ))
+
+    saved = request.args.get('saved')
+
+    # 🔥 ALWAYS SEND THIS
     exams = {
-        # MIDTERM
         "midterm_exam": student.midterm_exam,
         "midterm_laboratory_exam": student.midterm_laboratory_exam,
         "midterm_grade": student.midterm_grade,
         "midterm_remarks": student.midterm_remarks,
 
-        # FINAL
         "final_exam": student.final_exam,
         "final_laboratory_exam": student.final_laboratory_exam,
         "final_grade": student.final_grade,
@@ -902,7 +1041,8 @@ def exams_page(student_id, subject):
     return render_template(
         "exams.html",
         student=student,
-        exams=exams
+        exams=exams,
+        saved=saved
     )
 
 # View/Add/Edit/Delete Students

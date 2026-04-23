@@ -12,7 +12,6 @@
     <span class="navbar-brand">Attendance</span>
 
     <div class="d-flex gap-2">
-
       <a href="{{ url_for('subject_performance',
           student_id=student.student_id,
           subject=student.subject) }}"
@@ -24,7 +23,6 @@
          class="btn btn-warning btn-sm">
         Dashboard
       </a>
-
     </div>
   </div>
 </nav>
@@ -34,57 +32,184 @@
   <div class="card shadow-sm">
     <div class="card-body">
 
-      <h5 class="mb-3">{{ student.name }}</h5>
+      <h5 class="mb-1">{{ student.name }}</h5>
       <small class="text-muted">Subject: {{ student.subject }}</small>
 
-      <div class="table-responsive mt-3">
+      <form method="POST" class="mt-3">
 
-        <table class="table table-bordered text-center">
+        <div class="table-responsive">
+          <table class="table table-bordered text-center">
 
-          <thead class="table-dark">
-            <tr>
-              <th>Attendance</th>
-              <th class="bg-primary">MIDTERM</th>
-              <th class="bg-success">FINAL</th>
-            </tr>
-          </thead>
+            <thead class="table-dark">
+              <tr>
+                <th>Attendance</th>
+                <th class="bg-primary">MIDTERM</th>
+                <th class="bg-success">FINAL</th>
+              </tr>
+            </thead>
 
-          <tbody>
+            <tbody>
 
-            <tr>
-              <td><strong>Attendance 1</strong></td>
-              <td>{{ student.midterm_attendance1 or '-' }}</td>
-              <td>{{ student.final_attendance1 or '-' }}</td>
-            </tr>
+              {% set role = session.get('role') %}
+              {% set can_edit = role in ['Admin', 'Instructor'] %}
 
-            <tr>
-              <td><strong>Attendance 2</strong></td>
-              <td>{{ student.midterm_attendance2 or '-' }}</td>
-              <td>{{ student.final_attendance2 or '-' }}</td>
-            </tr>
+              <tr>
+                <td><strong>Attendance 1</strong></td>
 
-            <tr>
-              <td><strong>Attendance 3</strong></td>
-              <td>{{ student.midterm_attendance3 or '-' }}</td>
-              <td>{{ student.final_attendance3 or '-' }}</td>
-            </tr>
+                <td>
+                  {% if can_edit %}
+                    <input class="form-control text-center"
+                           name="midterm_attendance1"
+                           value="{{ student.midterm_attendance1 }}">
+                  {% else %}
+                    {{ student.midterm_attendance1 or '-' }}
+                  {% endif %}
+                </td>
 
-            <tr>
-              <td><strong>Attendance 4</strong></td>
-              <td>{{ student.midterm_attendance4 or '-' }}</td>
-              <td>{{ student.final_attendance4 or '-' }}</td>
-            </tr>
+                <td>
+                  {% if can_edit %}
+                    <input class="form-control text-center"
+                           name="final_attendance1"
+                           value="{{ student.final_attendance1 }}">
+                  {% else %}
+                    {{ student.final_attendance1 or '-' }}
+                  {% endif %}
+                </td>
+              </tr>
 
-          </tbody>
+              <tr>
+                <td><strong>Attendance 2</strong></td>
 
-        </table>
+                <td>
+                  {% if can_edit %}
+                    <input class="form-control text-center"
+                           name="midterm_attendance2"
+                           value="{{ student.midterm_attendance2 }}">
+                  {% else %}
+                    {{ student.midterm_attendance2 or '-' }}
+                  {% endif %}
+                </td>
 
-      </div>
+                <td>
+                  {% if can_edit %}
+                    <input class="form-control text-center"
+                           name="final_attendance2"
+                           value="{{ student.final_attendance2 }}">
+                  {% else %}
+                    {{ student.final_attendance2 or '-' }}
+                  {% endif %}
+                </td>
+              </tr>
+
+              <tr>
+                <td><strong>Attendance 3</strong></td>
+
+                <td>
+                  {% if can_edit %}
+                    <input class="form-control text-center"
+                           name="midterm_attendance3"
+                           value="{{ student.midterm_attendance3 }}">
+                  {% else %}
+                    {{ student.midterm_attendance3 or '-' }}
+                  {% endif %}
+                </td>
+
+                <td>
+                  {% if can_edit %}
+                    <input class="form-control text-center"
+                           name="final_attendance3"
+                           value="{{ student.final_attendance3 }}">
+                  {% else %}
+                    {{ student.final_attendance3 or '-' }}
+                  {% endif %}
+                </td>
+              </tr>
+
+              <tr>
+                <td><strong>Attendance 4</strong></td>
+
+                <td>
+                  {% if can_edit %}
+                    <input class="form-control text-center"
+                           name="midterm_attendance4"
+                           value="{{ student.midterm_attendance4 }}">
+                  {% else %}
+                    {{ student.midterm_attendance4 or '-' }}
+                  {% endif %}
+                </td>
+
+                <td>
+                  {% if can_edit %}
+                    <input class="form-control text-center"
+                           name="final_attendance4"
+                           value="{{ student.final_attendance4 }}">
+                  {% else %}
+                    {{ student.final_attendance4 or '-' }}
+                  {% endif %}
+                </td>
+              </tr>
+
+            </tbody>
+
+          </table>
+        </div>
+
+        {% if role in ['Admin','Instructor'] %}
+        <button type="submit" class="btn btn-success w-100 mt-2">
+          Save Changes
+        </button>
+        {% endif %}
+
+      </form>
 
     </div>
   </div>
 
 </div>
+
+{% if saved %}
+<div class="modal fade show" id="successModal" tabindex="-1" style="display:block; background:rgba(0,0,0,0.5);">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+
+      <div class="modal-header bg-success text-white">
+        <h5 class="modal-title">Success</h5>
+      </div>
+
+      <div class="modal-body">
+        Attendance updated successfully!
+        <br><br>
+        What would you like to do next?
+      </div>
+
+      <div class="modal-footer">
+        <a href="{{ url_for('attendance_page', student_id=student.student_id, subject=student.subject) }}"
+           class="btn btn-primary">
+          Stay
+        </a>
+
+        <a href="{{ url_for('subject_performance', student_id=student.student_id, subject=student.subject) }}"
+           class="btn btn-secondary">
+          Back to Subject
+        </a>
+
+        <a href="{{ url_for('dashboard_student') }}"
+           class="btn btn-warning">
+          Dashboard
+        </a>
+
+        {% if session.get('role') == 'Admin' %}
+        <a href="{{ url_for('dashboard_admin') }}"
+           class="btn btn-danger">
+          Admin Dashboard
+        </a>
+        {% endif %}
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endif %}
 
 </body>
 </html>
