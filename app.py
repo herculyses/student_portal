@@ -1461,6 +1461,16 @@ def upload_students():
                             # Section
                             'section': section,   # ✅ ADD THIS
 
+                            # Attendance
+                            'midterm_attendance1': row.get('midterm_attendance1'),
+                            'midterm_attendance2': row.get('midterm_attendance2'),
+                            'midterm_attendance3': row.get('midterm_attendance3'),
+                            'midterm_attendance4': row.get('midterm_attendance4'),
+                            'final_attendance1': row.get('final_attendance1'),
+                            'final_attendance2': row.get('final_attendance2'),
+                            'final_attendance3': row.get('final_attendance3'),
+                            'final_attendance4': row.get('final_attendance4'),
+
                             # Midterm Quizzes
                             'midterm_quiz1': row.get('midterm_quiz1'),
                             'midterm_quiz2': row.get('midterm_quiz2'),
@@ -1498,6 +1508,10 @@ def upload_students():
                             'final_pit2': row.get('final_pit2'),
                             'final_pit3': row.get('final_pit3'),
                             'final_pit4': row.get('final_pit4'),
+
+				# PIT
+                            'midterm_report1': row.get('midterm_report1'),
+                            'final_report1': row.get('final_report1'),
 
                             # Exercise
                             'midterm_exercise1': row.get('midterm_exercise1'),
