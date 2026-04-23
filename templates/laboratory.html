@@ -9,87 +9,66 @@
 
 <nav class="navbar navbar-dark bg-primary">
   <div class="container-fluid">
-    <span class="navbar-brand">Laboratory Performance</span>
+    <span class="navbar-brand">Laboratory</span>
 
     <div class="d-flex gap-2">
-      
-      <!-- Back to Subject Performance -->
       <a href="{{ url_for('subject_performance',
           student_id=student.student_id,
           subject=student.subject) }}"
-         class="btn btn-light btn-sm">
-        Back
-      </a>
+         class="btn btn-light btn-sm">Back</a>
 
-      <!-- Back to Dashboard -->
       <a href="{{ url_for('dashboard_student', student_id=student.student_id) }}"
-         class="btn btn-warning btn-sm">
-        Dashboard
-      </a>
-
+         class="btn btn-warning btn-sm">Dashboard</a>
     </div>
   </div>
 </nav>
 
 <div class="container my-4">
+  <div class="card shadow-sm">
+    <div class="card-body">
 
-<div class="card shadow-sm">
-<div class="card-body">
+      <h5>{{ student.name }}</h5>
+      <small class="text-muted">Subject: {{ student.subject }}</small>
 
-  <div class="mb-3">
-    <h5 class="mb-0">{{ student.name }}</h5>
-    <small class="text-muted">Subject: {{ student.subject }}</small>
+      <div class="table-responsive mt-3">
+        <table class="table table-bordered text-center">
+
+          <thead class="table-dark">
+            <tr>
+              <th>Laboratory</th>
+              <th class="bg-primary">MIDTERM</th>
+              <th class="bg-success">FINAL</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            <tr>
+              <td>Lab 1</td>
+              <td>{{ student.midterm_laboratory1 or '-' }}</td>
+              <td>{{ student.final_laboratory1 or '-' }}</td>
+            </tr>
+            <tr>
+              <td>Lab 2</td>
+              <td>{{ student.midterm_laboratory2 or '-' }}</td>
+              <td>{{ student.final_laboratory2 or '-' }}</td>
+            </tr>
+            <tr>
+              <td>Lab 3</td>
+              <td>{{ student.midterm_laboratory3 or '-' }}</td>
+              <td>{{ student.final_laboratory3 or '-' }}</td>
+            </tr>
+            <tr>
+              <td>Lab 4</td>
+              <td>{{ student.midterm_laboratory4 or '-' }}</td>
+              <td>{{ student.final_laboratory4 or '-' }}</td>
+            </tr>
+          </tbody>
+
+        </table>
+      </div>
+
+    </div>
   </div>
-
-  <!-- table starts here -->
-
-<table class="table table-bordered">
-<thead class="table-dark">
-
-<!-- MIDTERM LAB -->
-<h6 class="mt-4 text-primary">Midterm Laboratory</h6>
-<table class="table table-bordered">
-  <thead class="table-light">
-    <tr>
-      <th>Lab 1</th>
-      <th>Lab 2</th>
-      <th>Lab 3</th>
-      <th>Lab 4</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>{{ labs.midterm[0] or '-' }}</td>
-      <td>{{ labs.midterm[1] or '-' }}</td>
-      <td>{{ labs.midterm[2] or '-' }}</td>
-      <td>{{ labs.midterm[3] or '-' }}</td>
-    </tr>
-  </tbody>
-</table>
-
-<!-- FINAL LAB -->
-<h6 class="mt-4 text-success">Final Laboratory</h6>
-<table class="table table-bordered">
-  <thead class="table-light">
-    <tr>
-      <th>Lab 1</th>
-      <th>Lab 2</th>
-      <th>Lab 3</th>
-      <th>Lab 4</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>{{ labs.final[0] or '-' }}</td>
-      <td>{{ labs.final[1] or '-' }}</td>
-      <td>{{ labs.final[2] or '-' }}</td>
-      <td>{{ labs.final[3] or '-' }}</td>
-    </tr>
-  </tbody>
-</table>
-</div>
-</div>
-
 </div>
 
 </body>

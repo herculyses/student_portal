@@ -9,85 +9,66 @@
 
 <nav class="navbar navbar-dark bg-primary">
   <div class="container-fluid">
-    <span class="navbar-brand">Performance Innovative Task</span>
+    <span class="navbar-brand">PIT</span>
 
     <div class="d-flex gap-2">
-      
-      <!-- Back to Subject Performance -->
       <a href="{{ url_for('subject_performance',
           student_id=student.student_id,
           subject=student.subject) }}"
-         class="btn btn-light btn-sm">
-        Back
-      </a>
+         class="btn btn-light btn-sm">Back</a>
 
-      <!-- Back to Dashboard -->
       <a href="{{ url_for('dashboard_student', student_id=student.student_id) }}"
-         class="btn btn-warning btn-sm">
-        Dashboard
-      </a>
-
+         class="btn btn-warning btn-sm">Dashboard</a>
     </div>
   </div>
 </nav>
 
 <div class="container my-4">
+  <div class="card shadow-sm">
+    <div class="card-body">
 
-<div class="card shadow-sm">
-<div class="card-body">
+      <h5>{{ student.name }}</h5>
+      <small class="text-muted">Subject: {{ student.subject }}</small>
 
-  <div class="mb-3">
-    <h5 class="mb-0">{{ student.name }}</h5>
-    <small class="text-muted">Subject: {{ student.subject }}</small>
+      <div class="table-responsive mt-3">
+        <table class="table table-bordered text-center">
+
+          <thead class="table-dark">
+            <tr>
+              <th>PIT</th>
+              <th class="bg-primary">MIDTERM</th>
+              <th class="bg-success">FINAL</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            <tr>
+              <td>PIT 1</td>
+              <td>{{ student.midterm_pit1 or '-' }}</td>
+              <td>{{ student.final_pit1 or '-' }}</td>
+            </tr>
+            <tr>
+              <td>PIT 2</td>
+              <td>{{ student.midterm_pit2 or '-' }}</td>
+              <td>{{ student.final_pit2 or '-' }}</td>
+            </tr>
+            <tr>
+              <td>PIT 3</td>
+              <td>{{ student.midterm_pit3 or '-' }}</td>
+              <td>{{ student.final_pit3 or '-' }}</td>
+            </tr>
+            <tr>
+              <td>PIT 4</td>
+              <td>{{ student.midterm_pit4 or '-' }}</td>
+              <td>{{ student.final_pit4 or '-' }}</td>
+            </tr>
+          </tbody>
+
+        </table>
+      </div>
+
+    </div>
   </div>
-
-  <!-- table starts here -->
-<h6 class="mt-4 text-primary">Midterm PIT</h6>
-<table class="table table-bordered">
-  <thead class="table-light">
-    <tr>
-      <th>PIT 1</th>
-      <th>PIT 2</th>
-      <th>PIT 3</th>
-      <th>PIT 4</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>{{ pit.midterm[0] or '-' }}</td>
-      <td>{{ pit.midterm[1] or '-' }}</td>
-      <td>{{ pit.midterm[2] or '-' }}</td>
-      <td>{{ pit.midterm[3] or '-' }}</td>
-    </tr>
-  </tbody>
-</table>
-
-<!-- FINAL PIT -->
-<h6 class="mt-4 text-success">Final PIT</h6>
-<table class="table table-bordered">
-  <thead class="table-light">
-    <tr>
-      <th>PIT 1</th>
-      <th>PIT 2</th>
-      <th>PIT 3</th>
-      <th>PIT 4</th>
-    </tr>
-  </thead>
-  <tbody>
-    <tr>
-      <td>{{ pit.final[0] or '-' }}</td>
-      <td>{{ pit.final[1] or '-' }}</td>
-      <td>{{ pit.final[2] or '-' }}</td>
-      <td>{{ pit.final[3] or '-' }}</td>
-    </tr>
-  </tbody>
-</table>
-
-</table>
-
-</div>
-</div>
-
 </div>
 
 </body>

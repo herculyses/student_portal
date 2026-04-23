@@ -734,6 +734,22 @@ def subject_performance(student_id, subject):
         performance=performance
     )
 
+@app.route('/attendance/<student_id>/<subject>')
+@login_required(role=['Student','Admin','Instructor'])
+def attendance_page(student_id, subject):
+
+    subject = unquote(subject)
+
+    student = Student.query.filter_by(
+        student_id=student_id,
+        subject=subject
+    ).first_or_404()
+
+    return render_template(
+        "attendance.html",
+        student=student
+    )
+
 @app.route('/quizzes/<student_id>/<subject>')
 @login_required(role=['Student','Admin','Instructor'])
 def quizzes_page(student_id, subject):
@@ -779,6 +795,22 @@ def pit_page(student_id, subject):
         "pit.html",
         student=student,
         pit=pit
+    )
+
+@app.route('/report/<student_id>/<subject>')
+@login_required(role=['Student','Admin','Instructor'])
+def report_page(student_id, subject):
+
+    subject = unquote(subject)
+
+    student = Student.query.filter_by(
+        student_id=student_id,
+        subject=subject
+    ).first_or_404()
+
+    return render_template(
+        "report.html",
+        student=student
     )
 
 @app.route('/laboratory/<student_id>/<subject>')
