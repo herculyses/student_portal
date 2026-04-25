@@ -16,11 +16,7 @@
       {{ student.subject }}
     </span>
 
-    <a href="{{ url_for(
-        'dashboard_student' if session.get('role') == 'Student'
-        else 'dashboard_admin'
-    ) }}"
-    class="btn btn-light btn-sm">
+    <a href="{{ url_for('dashboard_student', student_id=student.student_id) }}" class="btn btn-light btn-sm">
       Back
     </a>
 

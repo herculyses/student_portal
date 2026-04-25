@@ -349,26 +349,34 @@ def login_required(role=None):
 @app.route('/', methods=['GET', 'POST'])
 def login():
     form = LoginForm()
+
     if form.validate_on_submit():
         user = User.query.filter_by(username=form.username.data).first()
+
         if user and check_password_hash(user.password, form.password.data):
-            # ✅ Store integer primary key in session
+
             session['user_id'] = user.id
             session['username'] = user.username
             session['role'] = user.role
+
+            if user.role == 'Student':
+                session['student_id'] = user.username
+
             flash(f'Logged in successfully as {user.username}', 'success')
             add_log(user.username, 'Logged in')
-            time.sleep(1)  # Let DB/session settle
 
-            # Redirect based on role
             if user.role == 'Admin':
                 return redirect(url_for('dashboard_admin'))
+
             elif user.role == 'Instructor':
                 return redirect(url_for('dashboard_instructor'))
-            else:  # Student
+
+            else:
                 return redirect(url_for('dashboard_student'))
+
         else:
             flash('Invalid username or password', 'danger')
+
     return render_template('login.html', form=form)
 
 
@@ -469,7 +477,7 @@ def dashboard_student():
 
     # STUDENT
     if role == 'Student':
-        student_id = session.get('username')
+        student_id = session.get('student_id')
 
     # ADMIN / INSTRUCTOR
     else:
@@ -492,6 +500,7 @@ def dashboard_student():
     )
 
 @app.route('/admin/view_student/<student_id>')
+@login_required(role=['Admin','Instructor'])
 def admin_view_student(student_id):
     return redirect(url_for('dashboard_student', student_id=student_id))
 
@@ -1148,9 +1157,9 @@ def edit_student(student_id, subject):
         new_subject = form.subject.data.strip() or student.subject
 
         # Update core info
-        student.student_id = new_student_id
-        student.name = form.name.data.strip()
-        student.section = form.section.data.strip()
+        new_student_id = (form.student_id.data or "").strip()
+        student.name = (form.name.data or "").strip()
+        student.section = (form.section.data or "").strip()
         student.subject = new_subject
 
         # Update quizzes
@@ -1236,8 +1245,7 @@ def edit_student(student_id, subject):
                 f'Edited Student: {old_student_id} → {student.student_id} ({new_subject})')
         flash('Student record updated successfully!', 'success')
 
-        return redirect(url_for('dashboard_admin') if session.get('role') == 'Admin'
-                            else url_for('dashboard_instructor'))
+        return redirect(url_for('dashboard_student', student_id=new_student_id))
 
     # Only pre-fill manually on GET
     if request.method == 'GET':
