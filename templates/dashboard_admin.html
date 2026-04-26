@@ -59,7 +59,9 @@
           <a href="{{ url_for('upload_students') }}" class="btn btn-success" data-bs-toggle="tooltip" title="Upload students from CSV file"><i class="bi bi-upload"></i> Upload CSV</a>
           <a href="{{ url_for('add_student') }}" class="btn btn-primary" data-bs-toggle="tooltip" title="Add a new student manually"><i class="bi bi-person-add"></i> Add Student</a>
           <a href="{{ url_for('download_csv') }}" class="btn btn-info text-white" data-bs-toggle="tooltip" title="Download all student data as CSV"><i class="bi bi-download"></i> Download CSV</a>
-	  <a href="{{ url_for('download_database') }}" class="btn btn-dark text-white" data-bs-toggle="tooltip" title="Download full database backup"><i class="bi bi-database-down"></i> Download DB</a>
+<a href="{{ url_for('export_page') }}" class="btn btn-outline-primary">
+    <i class="bi bi-funnel"></i> Export Data
+</a>
         </div>
       </div>
 

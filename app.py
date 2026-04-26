@@ -59,9 +59,15 @@ class User(db.Model):
 
 class Student(db.Model):
     __tablename__ = 'student'
+
     student_id = db.Column(db.String(100), primary_key=True)
     name = db.Column(db.String(150), nullable=False)
+
+    year = db.Column(db.String(20))
     section = db.Column(db.String(50))
+    school_year = db.Column(db.String(20))
+    semester = db.Column(db.String(20))
+
     subject = db.Column(db.String(100), primary_key=True)
 
     # Attendance
@@ -1466,8 +1472,10 @@ def upload_students():
                         # Prepare grade-related fields
                         field_updates = {
 
-                            # Section
-                            'section': section,   # ✅ ADD THIS
+                            'section': section,
+                            'year': row.get('year'),
+                            'school_year': row.get('school_year'),
+                            'semester': row.get('semester'),
 
                             # Attendance
                             'midterm_attendance1': row.get('midterm_attendance1'),
@@ -1574,7 +1582,11 @@ def upload_students():
                                 'student_id': student_id.strip(),
                                 'name': name.strip(),
                                 'section': section.strip(),
-                                'subject': subject.strip().title()
+                                'subject': subject.strip().title(),
+
+                                'year': safe_str(row.get('year')).strip(),
+                                'school_year': safe_str(row.get('school_year')).strip(),
+                                'semester': safe_str(row.get('semester')).strip(),
                             }
                             for k, v in field_updates.items():
                                 if hasattr(Student, k):
@@ -1634,13 +1646,39 @@ def upload_students():
 @app.route('/dashboard/admin/download_csv')
 @login_required(role=['Admin', 'Instructor'])
 def download_csv():
-    students = Student.query.all()
+
+    # Get filters from export page
+    year = request.args.get('year')
+    section = request.args.get('section')
+    subject = request.args.get('subject')
+    semester = request.args.get('semester')
+    school_year = request.args.get('school_year')
+
+    # Base query
+    query = Student.query
+
+    # Apply filters only if they exist
+    if year:
+        query = query.filter(Student.year == year)
+
+    if section:
+        query = query.filter(Student.section == section)
+
+    if subject:
+        query = query.filter(Student.subject == subject)
+
+    if semester:
+        query = query.filter(Student.semester == semester)
+
+    if school_year:
+        query = query.filter(Student.school_year == school_year)
+
+    students = query.all()
 
     def clean(value):
         return '' if value is None else str(value).strip()
 
     def generate():
-        # FULL HEADER based on your model
         headers = [column.name for column in Student.__table__.columns]
         yield ",".join(headers) + "\n"
 
@@ -1655,24 +1693,96 @@ def download_csv():
     return Response(
         generate(),
         mimetype="text/csv",
-        headers={"Content-Disposition": "attachment;filename=students_full.csv"}
+        headers={
+            "Content-Disposition": "attachment; filename=students_filtered.csv"
+        }
     )
 
-# --- database download ---
-@app.route('/download_database')
-@login_required("Admin")
-def download_database():
-    db_path = os.path.join(os.getcwd(), 'database.db')
+from flask import Response
 
-    if not os.path.exists(db_path):
-        flash("Database file not found.", "danger")
-        return redirect(url_for('dashboard_admin'))
+# --- Export Data ---
+@app.route('/dashboard/admin/export')
+@login_required(role=['Admin', 'Instructor'])
+def export_csv():
 
-    return send_file(
-        db_path,
-        as_attachment=True,
-        download_name="student_portal_backup.db"
+    year = request.args.get('year', '').strip()
+    section = request.args.get('section', '').strip()
+    subject = request.args.get('subject', '').strip()
+    semester = request.args.get('semester', '').strip()
+    school_year = request.args.get('school_year', '').strip()
+
+    query = Student.query
+
+    if year:
+        query = query.filter(Student.year == year)
+
+    if section:
+        query = query.filter(Student.section == section)
+
+    if subject:
+        query = query.filter(Student.subject == subject)
+
+    if semester:
+        query = query.filter(Student.semester == semester)
+
+    if school_year:
+        query = query.filter(Student.school_year == school_year)
+
+    students = query.all()
+
+    def generate():
+
+        headers = [
+            "student_id",
+            "name",
+            "year",
+            "section",
+            "school_year",
+            "semester",
+            "subject",
+
+            "midterm_attendance1", "midterm_attendance2", "midterm_attendance3", "midterm_attendance4",
+            "final_attendance1", "final_attendance2", "final_attendance3", "final_attendance4",
+
+            "midterm_quiz1", "midterm_quiz2", "midterm_quiz3", "midterm_quiz4",
+            "final_quiz1", "final_quiz2", "final_quiz3", "final_quiz4",
+
+            "midterm_exam", "final_exam",
+
+            "midterm_grade", "final_grade",
+            "midterm_remarks", "final_remarks"
+        ]
+
+        yield ",".join(headers) + "\n"
+
+        for s in students:
+            row = []
+
+            for col in headers:
+                value = getattr(s, col, "")
+
+                if value is None:
+                    value = ""
+
+                value = str(value).replace('"', '""')
+                row.append(f'"{value}"')
+
+            yield ",".join(row) + "\n"
+
+    return Response(
+        generate(),
+        mimetype="text/csv",
+        headers={
+            "Content-Disposition": "attachment; filename=students_export.csv"
+        }
     )
+
+# --- Export Page ---
+@app.route('/dashboard/instructor/export_page')
+@app.route('/dashboard/admin/export_page')
+@login_required(role=['Admin', 'Instructor'])
+def export_page():
+    return render_template('export.html')
 
 # --- Initialize Database ---
 if __name__ == '__main__':
