@@ -5,14 +5,13 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Export Data</title>
 
-<!-- Bootstrap -->
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
 </head>
 
 <body class="bg-light">
 
-<!-- NAVBAR (optional simple version) -->
+<!-- NAVBAR -->
 <nav class="navbar navbar-dark bg-primary shadow">
   <div class="container-fluid">
     <span class="navbar-brand fw-bold">
@@ -20,9 +19,9 @@
     </span>
 
     <a href="{{ url_for('dashboard_admin') if session['role']=='Admin' else url_for('dashboard_instructor') }}"
-   class="btn btn-light btn-sm">
-   <i class="bi bi-arrow-left"></i> Back
-</a>
+       class="btn btn-light btn-sm">
+       <i class="bi bi-arrow-left"></i> Back
+    </a>
   </div>
 </nav>
 
@@ -30,17 +29,12 @@
 <div class="container mt-5">
 
   <div class="row justify-content-center">
-    <div class="col-md-6">
+    <div class="col-md-7">
 
       <div class="card shadow p-4">
 
-        <h4 class="mb-3 text-center">
-          📤 Export Student Data
-        </h4>
-
-        <p class="text-muted text-center">
-          Filter data before downloading CSV
-        </p>
+        <h4 class="text-center mb-2">📤 Export Student Data</h4>
+        <p class="text-muted text-center">Filter data before downloading CSV</p>
 
         <!-- FORM -->
         <form method="GET" action="{{ url_for('export_csv') }}">
@@ -58,18 +52,18 @@
           </div>
 
           <!-- SECTION -->
-<div class="mb-3">
-  <label class="form-label">Section</label>
-  <select name="section" class="form-select">
-    <option value="">All Sections</option>
-    <option value="2A">2A</option>
-    <option value="2B">2B</option>
-    <option value="3A">3A</option>
-    <option value="3B">3B</option>
-    <option value="4A">4A</option>
-    <option value="4B">4B</option>
-  </select>
-</div>
+          <div class="mb-3">
+            <label class="form-label">Section</label>
+            <select name="section" class="form-select">
+              <option value="">All Sections</option>
+              <option value="2A">2A</option>
+              <option value="2B">2B</option>
+              <option value="3A">3A</option>
+              <option value="3B">3B</option>
+              <option value="4A">4A</option>
+              <option value="4B">4B</option>
+            </select>
+          </div>
 
           <!-- SUBJECT -->
           <div class="mb-3">
@@ -89,38 +83,44 @@
           </div>
 
           <!-- SCHOOL YEAR -->
-<div class="mb-3">
-  <label class="form-label">School Year</label>
-  <select name="school_year" class="form-select">
-    <option value="">All School Years</option>
-    <option value="2023-2024">2023-2024</option>
-    <option value="2024-2025">2024-2025</option>
-    <option value="2025-2026">2025-2026</option>
-    <option value="2026-2027">2026-2027</option>
-    <option value="2027-2028">2027-2028</option>
-    <option value="2028-2029">2028-2029</option>
-  </select>
-</div>
+          <div class="mb-3">
+            <label class="form-label">School Year</label>
+            <select name="school_year" class="form-select">
+              <option value="">All School Years</option>
+              <option value="2023-2024">2023-2024</option>
+              <option value="2024-2025">2024-2025</option>
+              <option value="2025-2026">2025-2026</option>
+              <option value="2026-2027">2026-2027</option>
+              <option value="2027-2028">2027-2028</option>
+              <option value="2028-2029">2028-2029</option>
+            </select>
+          </div>
 
-          <!-- Activity Type -->
-<div class="mb-3">
-  <label class="form-label">Activity Type</label>
-  <select name="activity_type" class="form-select">
-    <option value="">All Activities</option>
+          <!-- ACTIVITY TYPE (FIXED VALUES) -->
+          <div class="mb-3">
+            <label class="form-label">Activity Type</label>
+            <select name="activity_type" class="form-select">
 
-    <option value="quiz">Quizzes</option>
-    <option value="exam">Exams</option>
-    <option value="attendance">Attendance</option>
-    <option value="pit">PIT</option>
-    <option value="exercise">Exercises</option>
-    <option value="laboratory">Laboratory</option>
-    <option value="report">Reports</option>
-    <option value="grades">Final Grades Only</option>
+              <option value="">All Activities</option>
 
-  </select>
-</div>
+              <option value="attendance">Attendance</option>
+              <option value="quiz">Quizzes</option>
+              <option value="exam">Exams</option>
+              <option value="pit">PIT</option>
+              <option value="exercise">Exercises</option>
+              <option value="laboratory">Laboratory</option>
+              <option value="report">Reports</option>
+              <option value="grades">Grades</option>
 
-          <!-- BUTTON -->
+            </select>
+          </div>
+
+          <!-- BUTTONS -->
+          <button type="submit" name="preview" value="1"
+                  class="btn btn-secondary w-100 mb-2">
+            👁 Preview Data
+          </button>
+
           <button type="submit" class="btn btn-primary w-100">
             <i class="bi bi-download"></i> Download CSV
           </button>

@@ -14,6 +14,7 @@ import csv
 from flask import Response
 from flask_wtf.csrf import CSRFProtect
 from urllib.parse import unquote
+from sqlalchemy import func
 
 # --- Flask Setup ---
 app = Flask(__name__)
@@ -1705,66 +1706,132 @@ from flask import Response
 @login_required(role=['Admin', 'Instructor'])
 def export_csv():
 
-    year = request.args.get('year', '').strip()
-    section = request.args.get('section', '').strip()
-    subject = request.args.get('subject', '').strip()
-    semester = request.args.get('semester', '').strip()
-    school_year = request.args.get('school_year', '').strip()
+    preview = request.args.get('preview')
+
+    year = (request.args.get('year') or '').strip()
+    section = (request.args.get('section') or '').strip()
+    subject = (request.args.get('subject') or '').strip()
+    semester = (request.args.get('semester') or '').strip()
+    school_year = (request.args.get('school_year') or '').strip()
+    activity_type = (request.args.get('activity_type') or '').strip()
 
     query = Student.query
 
+    # --- Filters (case-insensitive safe) ---
     if year:
-        query = query.filter(Student.year == year)
+        query = query.filter(func.lower(Student.year) == year.lower())
 
     if section:
-        query = query.filter(Student.section == section)
+        query = query.filter(func.lower(Student.section) == section.lower())
 
     if subject:
-        query = query.filter(Student.subject == subject)
+        query = query.filter(func.lower(Student.subject) == subject.lower())
 
     if semester:
-        query = query.filter(Student.semester == semester)
+        query = query.filter(func.lower(Student.semester) == semester.lower())
 
     if school_year:
-        query = query.filter(Student.school_year == school_year)
+        query = query.filter(func.lower(Student.school_year) == school_year.lower())
 
-    students = query.all()
+    students = query.limit(50).all()
 
-    def generate():
+    # --- Base headers ---
+    base_headers = [
+        "student_id", "name", "year", "section",
+        "school_year", "semester", "subject"
+    ]
 
-        headers = [
-            "student_id",
-            "name",
-            "year",
-            "section",
-            "school_year",
-            "semester",
-            "subject",
-
-            "midterm_attendance1", "midterm_attendance2", "midterm_attendance3", "midterm_attendance4",
-            "final_attendance1", "final_attendance2", "final_attendance3", "final_attendance4",
-
-            "midterm_quiz1", "midterm_quiz2", "midterm_quiz3", "midterm_quiz4",
-            "final_quiz1", "final_quiz2", "final_quiz3", "final_quiz4",
-
-            "midterm_exam", "final_exam",
-
-            "midterm_grade", "final_grade",
-            "midterm_remarks", "final_remarks"
+    # --- Activity mapping (IMPORTANT FIXED KEYS) ---
+    activity_columns = {
+        "attendance": [
+            "midterm_attendance1","midterm_attendance2",
+            "midterm_attendance3","midterm_attendance4",
+            "final_attendance1","final_attendance2",
+            "final_attendance3","final_attendance4"
+        ],
+        "quiz": [
+            "midterm_quiz1","midterm_quiz2","midterm_quiz3","midterm_quiz4",
+            "final_quiz1","final_quiz2","final_quiz3","final_quiz4",
+            "midterm_e_quiz1","midterm_e_quiz2","midterm_e_quiz3","midterm_e_quiz4",
+            "final_e_quiz1","final_e_quiz2","final_e_quiz3","final_e_quiz4",
+            "midterm_l_quiz1","midterm_l_quiz2","midterm_l_quiz3","midterm_l_quiz4",
+            "final_l_quiz1","final_l_quiz2","final_l_quiz3","final_l_quiz4"
+        ],
+        "exam": [
+            "midterm_exam",
+            "final_exam",
+            "midterm_laboratory_exam",
+            "final_laboratory_exam"
+        ],
+        "pit": [
+            "midterm_pit1","midterm_pit2","midterm_pit3","midterm_pit4",
+            "final_pit1","final_pit2","final_pit3","final_pit4"
+        ],
+        "exercise": [
+            "midterm_exercise1","midterm_exercise2",
+            "midterm_exercise3","midterm_exercise4",
+            "final_exercise1","final_exercise2",
+            "final_exercise3","final_exercise4"
+        ],
+        "laboratory": [
+            "midterm_laboratory1","midterm_laboratory2",
+            "midterm_laboratory3","midterm_laboratory4",
+            "final_laboratory1","final_laboratory2",
+            "final_laboratory3","final_laboratory4"
+        ],
+        "report": [
+            "midterm_report1",
+            "final_report1"
+        ],
+        "grades": [
+            "midterm_grade",
+            "final_grade",
+            "midterm_remarks",
+            "final_remarks"
         ]
+    }
 
+    # --- Build final headers ---
+    headers = base_headers.copy()
+    if activity_type in activity_columns:
+        headers += activity_columns[activity_type]
+
+    # --- PREVIEW MODE ---
+    if preview:
+        data = []
+
+        for s in students:
+            row = {}
+            for h in headers:
+                value = getattr(s, h, "")
+                row[h] = "" if value is None else str(value).strip()
+
+            data.append(row)
+
+        return render_template(
+            "export_preview.html",
+            data=data,
+            headers=headers,
+            filters=request.args
+        )
+
+    # --- SAFE VALUE ---
+    def safe_value(v):
+        if v is None:
+            return ""
+        return str(v).strip()
+
+    # --- CSV GENERATOR ---
+    def generate():
+        yield '\ufeff'
         yield ",".join(headers) + "\n"
 
         for s in students:
             row = []
 
             for col in headers:
-                value = getattr(s, col, "")
-
-                if value is None:
-                    value = ""
-
-                value = str(value).replace('"', '""')
+                value = safe_value(getattr(s, col, ""))
+                value = value.replace('"', '""')
                 row.append(f'"{value}"')
 
             yield ",".join(row) + "\n"
@@ -1772,11 +1839,8 @@ def export_csv():
     return Response(
         generate(),
         mimetype="text/csv",
-        headers={
-            "Content-Disposition": "attachment; filename=students_export.csv"
-        }
+        headers={"Content-Disposition": "attachment; filename=students_export.csv"}
     )
-
 # --- Export Page ---
 @app.route('/dashboard/instructor/export_page')
 @app.route('/dashboard/admin/export_page')
