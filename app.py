@@ -1714,6 +1714,7 @@ def export_csv():
     semester = (request.args.get('semester') or '').strip()
     school_year = (request.args.get('school_year') or '').strip()
     activity_type = (request.args.get('activity_type') or '').strip()
+    term = (request.args.get('term') or '').strip().lower()
 
     query = Student.query
 
@@ -1737,52 +1738,78 @@ def export_csv():
 
     # --- Base headers ---
     base_headers = [
-        "student_id", "name", "year", "section",
-        "school_year", "semester", "subject"
+        "student_id",
+        "name",
+        "year",
+        "section",
+        "school_year",
+        "semester",
+        "subject"
     ]
 
-    # --- Activity mapping (IMPORTANT FIXED KEYS) ---
+    # --- Activity mapping ---
     activity_columns = {
+
         "attendance": [
             "midterm_attendance1","midterm_attendance2",
             "midterm_attendance3","midterm_attendance4",
             "final_attendance1","final_attendance2",
             "final_attendance3","final_attendance4"
         ],
+
         "quiz": [
             "midterm_quiz1","midterm_quiz2","midterm_quiz3","midterm_quiz4",
             "final_quiz1","final_quiz2","final_quiz3","final_quiz4",
-            "midterm_e_quiz1","midterm_e_quiz2","midterm_e_quiz3","midterm_e_quiz4",
-            "final_e_quiz1","final_e_quiz2","final_e_quiz3","final_e_quiz4",
-            "midterm_l_quiz1","midterm_l_quiz2","midterm_l_quiz3","midterm_l_quiz4",
-            "final_l_quiz1","final_l_quiz2","final_l_quiz3","final_l_quiz4"
+
+            "midterm_e_quiz1","midterm_e_quiz2",
+            "midterm_e_quiz3","midterm_e_quiz4",
+
+            "final_e_quiz1","final_e_quiz2",
+            "final_e_quiz3","final_e_quiz4",
+
+            "midterm_l_quiz1","midterm_l_quiz2",
+            "midterm_l_quiz3","midterm_l_quiz4",
+
+            "final_l_quiz1","final_l_quiz2",
+            "final_l_quiz3","final_l_quiz4"
         ],
+
         "exam": [
             "midterm_exam",
             "final_exam",
             "midterm_laboratory_exam",
             "final_laboratory_exam"
         ],
+
         "pit": [
-            "midterm_pit1","midterm_pit2","midterm_pit3","midterm_pit4",
-            "final_pit1","final_pit2","final_pit3","final_pit4"
+            "midterm_pit1","midterm_pit2",
+            "midterm_pit3","midterm_pit4",
+
+            "final_pit1","final_pit2",
+            "final_pit3","final_pit4"
         ],
+
         "exercise": [
             "midterm_exercise1","midterm_exercise2",
             "midterm_exercise3","midterm_exercise4",
+
             "final_exercise1","final_exercise2",
             "final_exercise3","final_exercise4"
         ],
+
         "laboratory": [
             "midterm_laboratory1","midterm_laboratory2",
             "midterm_laboratory3","midterm_laboratory4",
+
             "final_laboratory1","final_laboratory2",
             "final_laboratory3","final_laboratory4"
         ],
+
         "report": [
             "midterm_report1",
             "final_report1"
         ],
+
         "grades": [
             "midterm_grade",
             "final_grade",
@@ -1793,15 +1820,35 @@ def export_csv():
 
     # --- Build final headers ---
     headers = base_headers.copy()
+
     if activity_type in activity_columns:
-        headers += activity_columns[activity_type]
+
+        selected_columns = activity_columns[activity_type]
+
+        # --- FILTER BY TERM ---
+        if term == "midterm":
+            selected_columns = [
+                col for col in selected_columns
+                if col.startswith("midterm")
+            ]
+
+        elif term == "final":
+            selected_columns = [
+                col for col in selected_columns
+                if col.startswith("final")
+            ]
+
+        headers += selected_columns
 
     # --- PREVIEW MODE ---
     if preview:
+
         data = []
 
         for s in students:
+
             row = {}
+
             for h in headers:
                 value = getattr(s, h, "")
                 row[h] = "" if value is None else str(value).strip()
@@ -1823,24 +1870,35 @@ def export_csv():
 
     # --- CSV GENERATOR ---
     def generate():
+
         yield '\ufeff'
+
         yield ",".join(headers) + "\n"
 
         for s in students:
+
             row = []
 
             for col in headers:
+
                 value = safe_value(getattr(s, col, ""))
+
                 value = value.replace('"', '""')
+
                 row.append(f'"{value}"')
 
             yield ",".join(row) + "\n"
 
+    filename = f"{activity_type or 'students'}_{term or 'all'}_export.csv"
+
     return Response(
         generate(),
         mimetype="text/csv",
-        headers={"Content-Disposition": "attachment; filename=students_export.csv"}
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}"
+        }
     )
+
 # --- Export Page ---
 @app.route('/dashboard/instructor/export_page')
 @app.route('/dashboard/admin/export_page')
