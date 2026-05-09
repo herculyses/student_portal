@@ -159,68 +159,6 @@ class Student(db.Model):
         db.UniqueConstraint('student_id', 'subject', name='uix_student_subject'),
     )
 
-class Log(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user = db.Column(db.String(100))
-    action = db.Column(db.String(255))
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-
-# --- Utility Functions ---
-def allowed_file(filename):
-    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-def add_log(user, action):
-    log_entry = Log(user=user, action=action)
-    db.session.add(log_entry)
-    db.session.commit()
-
-def get_dashboard_url():
-    role = session.get('role')
-    if role == 'Admin':
-        return url_for('dashboard_admin')
-    elif role == 'Instructor':
-        return url_for('dashboard_instructor')
-    return url_for('login')
-
-def patch_update(obj, data_dict):
-    for key, value in data_dict.items():
-        if hasattr(obj, key):
-
-            if value is None:
-                continue
-
-            val = str(value).strip()
-
-            # CLEAR keyword → set to blank (NULL in DB)
-            if val.upper() == "CLEAR":
-                setattr(obj, key, None)
-
-            # normal update (includes 0)
-            elif val != "":
-                setattr(obj, key, val)
-
-def clean_input(value):
-    return value if value not in [None, ""] else None
-
-def get_student(student_id):
-    # fetch student from DB
-    pass
-
-def get_quiz_records(student_id):
-    pass
-
-def get_pit_records(student_id):
-    pass
-
-def get_laboratory_records(student_id):
-    pass
-
-def get_exercise_records(student_id):
-    pass
-
-def get_exam_records(student_id):
-    pass
-
 # --- Forms ---
 class LoginForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired()])
@@ -335,6 +273,68 @@ class UploadCSVForm(FlaskForm):
     file = FileField('CSV File', validators=[DataRequired()])
     submit = SubmitField('Upload')
 
+class Log(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user = db.Column(db.String(100))
+    action = db.Column(db.String(255))
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+# --- Utility Functions ---
+def allowed_file(filename):
+    return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def add_log(user, action):
+    log_entry = Log(user=user, action=action)
+    db.session.add(log_entry)
+    db.session.commit()
+
+def get_dashboard_url():
+    role = session.get('role')
+    if role == 'Admin':
+        return url_for('dashboard_admin')
+    elif role == 'Instructor':
+        return url_for('dashboard_instructor')
+    return url_for('login')
+
+def patch_update(obj, data_dict):
+    for key, value in data_dict.items():
+        if hasattr(obj, key):
+
+            if value is None:
+                continue
+
+            val = str(value).strip()
+
+            # CLEAR keyword → set to blank (NULL in DB)
+            if val.upper() == "CLEAR":
+                setattr(obj, key, None)
+
+            # normal update (includes 0)
+            elif val != "":
+                setattr(obj, key, val)
+
+def clean_input(value):
+    return value if value not in [None, ""] else None
+
+def get_student(student_id):
+    # fetch student from DB
+    pass
+
+def get_quiz_records(student_id):
+    pass
+
+def get_pit_records(student_id):
+    pass
+
+def get_laboratory_records(student_id):
+    pass
+
+def get_exercise_records(student_id):
+    pass
+
+def get_exam_records(student_id):
+    pass
+
 # --- Login Required Decorator ---
 def login_required(role=None):
     def decorator(f):
@@ -386,7 +386,6 @@ def login():
 
     return render_template('login.html', form=form)
 
-
 # Logout
 @app.route('/logout')
 def logout():
@@ -415,7 +414,7 @@ def change_password():
 
         # Ensure new password matches confirmation
         if new_password != confirm_password:
-            flash("⚠️ New passwords do not match.", "warning")
+            flash("⚠️ New password do not match.", "warning")
             return redirect(url_for('change_password'))
 
         # Ensure new password isn't same as current
@@ -436,7 +435,7 @@ def change_password():
 
         # Force logout for security
         session.clear()
-        flash("✅ Nautro na imuhang password! Pwede na ta manlupad.", "success")
+        flash("✅ Nautro na imuhang password! Congrats!.", "success")
         return redirect(url_for('login'))
 
     return render_template('change_password.html')
@@ -506,6 +505,8 @@ def dashboard_student():
         role=role
     )
 
+
+# View Student (Admin)
 @app.route('/admin/view_student/<student_id>')
 @login_required(role=['Admin','Instructor'])
 def admin_view_student(student_id):
