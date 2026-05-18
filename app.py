@@ -1,4 +1,4 @@
-from flask import Flask, render_template, redirect, url_for, request, session, flash, send_file
+from flask import Flask, render_template, redirect, url_for, request, session, flash, send_file, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_wtf import FlaskForm
 from wtforms import IntegerField, TextAreaField, StringField, PasswordField, FileField, SubmitField, SelectField
@@ -6,15 +6,18 @@ from wtforms.validators import DataRequired, Optional
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
-import os, csv
 from datetime import datetime
-import time
 from flask import get_flashed_messages
-import csv
 from flask import Response
 from flask_wtf.csrf import CSRFProtect
 from urllib.parse import unquote
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
+import pandas as pd
+import time
+import os, csv
+import csv
+import io
 
 # --- Flask Setup ---
 app = Flask(__name__)
@@ -159,7 +162,144 @@ class Student(db.Model):
         db.UniqueConstraint('student_id', 'subject', name='uix_student_subject'),
     )
 
-# --- Forms ---
+class Log(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user = db.Column(db.String(100))
+    action = db.Column(db.String(255))
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+# =========================
+# EXAM SYSTEM MODELS
+# =========================
+
+class Subject(db.Model):
+    __tablename__ = 'subjects'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    subject_code = db.Column(db.String(20))
+    subject_name = db.Column(db.String(100))
+
+    questions = db.relationship(
+        'Question',
+        backref='subject',
+        lazy=True
+    )
+
+    exams = db.relationship(
+        'Exam',
+        backref='subject',
+        lazy=True
+    )
+
+class Exam(db.Model):
+    __tablename__ = 'exams'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    subject_id = db.Column(
+        db.Integer,
+        db.ForeignKey('subjects.id'),
+        nullable=False
+    )
+
+    title = db.Column(db.String(200), nullable=False)
+
+    term = db.Column(db.String(50))        # NEW
+    exam_type = db.Column(db.String(50))   # NEW
+
+    description = db.Column(db.Text)
+
+    duration_minutes = db.Column(db.Integer, default=30)
+
+    is_active = db.Column(db.Boolean, default=True)
+
+    created_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow
+    )
+
+class Question(db.Model):
+    __tablename__ = 'questions'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    subject_id = db.Column(
+        db.Integer,
+        db.ForeignKey('subjects.id'),
+        nullable=False
+    )
+
+    question_text = db.Column(db.Text, nullable=False)
+
+    choice_a = db.Column(db.String(255))
+    choice_b = db.Column(db.String(255))
+    choice_c = db.Column(db.String(255))
+    choice_d = db.Column(db.String(255))
+
+    correct_answer = db.Column(db.String(10))
+
+    points = db.Column(db.Integer, default=1)
+
+class ExamAttempt(db.Model):
+    __tablename__ = 'exam_attempts'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    student_id = db.Column(
+        db.String(100),
+        nullable=False
+    )
+
+    subject_id = db.Column(
+        db.Integer,
+        db.ForeignKey('exams.id'),
+        nullable=False
+    )
+
+    score = db.Column(db.Integer, default=0)
+
+    started_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow
+    )
+
+    submitted_at = db.Column(db.DateTime)
+
+    tab_switches = db.Column(db.Integer, default=0)
+
+    is_submitted = db.Column(db.Boolean, default=False)
+
+    answers = db.relationship(
+        'StudentAnswer',
+        backref='attempt',
+        lazy=True,
+        cascade="all, delete"
+    )
+
+
+class StudentAnswer(db.Model):
+    __tablename__ = 'student_answers'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    attempt_id = db.Column(
+        db.Integer,
+        db.ForeignKey('exam_attempts.id'),
+        nullable=False
+    )
+
+    question_id = db.Column(
+        db.Integer,
+        db.ForeignKey('questions.id'),
+        nullable=False
+    )
+
+    selected_answer = db.Column(db.String(1))
+
+    is_correct = db.Column(db.Boolean)
+
+# --- FlaskForms ---
 class LoginForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired()])
     password = PasswordField('Password', validators=[DataRequired()])
@@ -273,11 +413,104 @@ class UploadCSVForm(FlaskForm):
     file = FileField('CSV File', validators=[DataRequired()])
     submit = SubmitField('Upload')
 
-class Log(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    user = db.Column(db.String(100))
-    action = db.Column(db.String(255))
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+# =========================
+# EXAM SYSTEM FORMS
+# =========================
+
+class ExamForm(FlaskForm):
+
+    subject_id = SelectField(
+        'Subject',
+        coerce=int,
+        validators=[DataRequired()]
+    )
+
+    title = StringField(
+        'Exam Title',
+        validators=[DataRequired()]
+    )
+
+    description = TextAreaField(
+        'Description',
+        validators=[Optional()]
+    )
+
+    duration_minutes = IntegerField(
+        'Duration (Minutes)',
+        validators=[DataRequired()]
+    )
+
+    # NEW FIELDS 👇
+    term = SelectField(
+        'Term',
+        choices=[
+            ('prelim', 'Prelim'),
+            ('midterm', 'Midterm'),
+            ('final', 'Final')
+        ],
+        validators=[DataRequired()]
+    )
+
+    exam_type = SelectField(
+        'Exam Type',
+        choices=[
+            ('quiz', 'Quiz'),
+            ('major', 'Major Exam'),
+            ('pit', 'PIT'),
+            ('exercise', 'Exercise')
+        ],
+        validators=[DataRequired()]
+    )
+
+    submit = SubmitField('Create Exam')
+
+
+class QuestionForm(FlaskForm):
+
+    question_text = TextAreaField(
+        'Question',
+        validators=[DataRequired()]
+    )
+
+    choice_a = StringField(
+        'Choice A',
+        validators=[DataRequired()]
+    )
+
+    choice_b = StringField(
+        'Choice B',
+        validators=[DataRequired()]
+    )
+
+    choice_c = StringField(
+        'Choice C',
+        validators=[Optional()]
+    )
+
+    choice_d = StringField(
+        'Choice D',
+        validators=[Optional()]
+    )
+
+    correct_answer = SelectField(
+        'Correct Answer',
+        choices=[
+            ('A', 'A'),
+            ('B', 'B'),
+            ('C', 'C'),
+            ('D', 'D')
+        ],
+        validators=[DataRequired()]
+    )
+
+    points = IntegerField(
+        'Points',
+        default=1,
+        validators=[DataRequired()]
+    )
+
+    submit = SubmitField('Add Question')
+
 
 # --- Utility Functions ---
 def allowed_file(filename):
@@ -449,17 +682,25 @@ def dashboard_admin():
     students = Student.query.all()
     
     # Fetch all instructors
-    instructors = User.query.filter_by(role='Instructor').all()
+    instructors = User.query.filter_by(role='Instructor').order_by(User.id.desc()).all()
     
     # Fetch all logs (newest first)
-    logs = Log.query.order_by(Log.timestamp.desc()).all()
+    logs = Log.query.order_by(Log.timestamp.desc()).limit(10).all()
+
+    # FETCH SUBJECTS
+    subjects = Subject.query.order_by(Subject.id.desc()).all()
+
+    # FETCH EXAMS
+    exams = Exam.query.order_by(Exam.created_at.desc()).all()
     
     # Render template
     return render_template(
         'dashboard_admin.html',
         students=students,
         instructors=instructors,
-        logs=logs
+        logs=logs,
+        subjects=subjects,
+        exams=exams
     )
 
 # ---- Instructor Dashboard ----
@@ -467,11 +708,15 @@ def dashboard_admin():
 @login_required(role='Instructor')
 def dashboard_instructor():
     # Fetch all students (or filter by instructor if needed)
-    students = Student.query.all()  
+    students = Student.query.all()
+
+    # FETCH SUBJECTS
+    subjects = Subject.query.all()
 
     return render_template(
         'dashboard_instructor.html',
-        students=students
+        students=students,
+        subjects=subjects
     )
 
 # ---- Student Dashboard ----
@@ -498,11 +743,15 @@ def dashboard_student():
     # 🔥 FIX: ALWAYS define name safely
     student_name = students[0].name if students and students[0].name else "Student"
 
+    # FETCH SUBJECTS
+    subjects = Subject.query.all()
+
     return render_template(
         "dashboard_student.html",
         students=students,
         student_name=student_name,
-        role=role
+        role=role,
+        subjects=subjects
     )
 
 
@@ -633,6 +882,489 @@ def bulk_delete_instructors():
     else:
         flash('No instructors selected for deletion.', 'warning')
     return redirect(url_for('view_instructors'))
+
+# =========================
+# Exam routes
+# =========================
+
+# ---- 1. ➕ ADD SUBJECT ----
+@app.route('/add-subject', methods=['GET', 'POST'])
+@login_required(role=['Instructor', 'Admin'])
+def add_subject():
+
+    if request.method == 'POST':
+
+        code = request.form.get('subject_code')
+        name = request.form.get('subject_name')
+
+        subject = Subject(
+            subject_code=code,
+            subject_name=name
+        )
+
+        try:
+            db.session.add(subject)
+            db.session.commit()
+            flash("Subject added successfully!", "success")
+
+        except IntegrityError:
+            db.session.rollback()  # IMPORTANT: reset session state
+            flash(f"Subject code '{code}' already exists.", "danger")
+
+        return redirect(url_for('add_subject'))
+
+    return redirect(url_for('dashboard_admin', open_exam=1))
+
+# ---- 2. 🧠 CREATE EXAM ----
+@app.route('/create-exam', methods=['GET', 'POST'])
+@login_required(role=['Instructor', 'Admin'])
+def create_exam():
+
+    form = ExamForm()
+
+    # 🔥 populate subjects dynamically
+    form.subject_id.choices = [
+        (s.id, f"{s.subject_code} - {s.subject_name}")
+        for s in Subject.query.all()
+    ]
+
+    if form.validate_on_submit():
+
+        exam = Exam(
+            subject_id=form.subject_id.data,
+            title=form.title.data,
+            description=form.description.data,
+            duration_minutes=form.duration_minutes.data,
+            term=form.term.data,
+            exam_type=form.exam_type.data
+        )
+
+        db.session.add(exam)
+        db.session.commit()
+
+        flash("Exam created successfully", "success")
+        return redirect(url_for('add_question', subject_id=subject.id))
+
+    return render_template("create_exam.html", form=form)
+
+# ---- 3. ✏️ ADD QUESTION ----
+@app.route('/add-question/<int:subject_id>', methods=['GET', 'POST'])
+@login_required(role='Admin')
+def add_question(subject_id):
+
+    subject = Subject.query.get_or_404(subject_id)
+
+    form = QuestionForm()
+
+    if form.validate_on_submit():
+
+        question = Question(
+            subject_id=subject.id,
+            question_text=form.question_text.data,
+            choice_a=form.choice_a.data,
+            choice_b=form.choice_b.data,
+            choice_c=form.choice_c.data,
+            choice_d=form.choice_d.data,
+            correct_answer=form.correct_answer.data,
+            points=form.points.data
+        )
+
+        db.session.add(question)
+        db.session.commit()
+
+        flash("Question added successfully!", "success")
+
+        return redirect(
+            url_for(
+                'add_question',
+                subject_id=subject.id
+            )
+        )
+
+    questions = Question.query.filter_by(
+        subject_id=subject.id
+    ).all()
+
+    return render_template(
+        'add_question.html',
+        form=form,
+        subject=subject,
+        questions=questions
+    )
+
+# ---- 4. 📚 STUDENT EXAMS LIST ----
+@app.route('/student/exams')
+@login_required(role='Student')
+def student_exams():
+
+    exams = Exam.query.filter_by(is_active=True).all()
+
+    return render_template('student_exams.html', exams=exams)
+
+# ---- 5. 🚀 START EXAM (RESUME + RANDOMIZE + TIMER) ----
+@app.route('/exam/<int:subject_id>/start')
+@login_required(role='Student')
+def start_exam(subject_id):
+
+    student_id = session.get('user_id')
+    subject = Subject.query.get_or_404(subject_id)
+
+    attempt = ExamAttempt.query.filter_by(
+        student_id=student_id,
+        subject_id=subject_id,
+        is_submitted=False
+    ).first()
+
+    if not attempt:
+        attempt = ExamAttempt(
+            student_id=student_id,
+            subject_id=subject_id
+        )
+        db.session.add(attempt)
+        db.session.commit()
+
+    # RANDOMIZE QUESTIONS
+    questions = Question.query.filter_by(subject_id=subject_id).all()
+
+    import random
+    random.shuffle(questions)
+
+    session['question_order'] = [q.id for q in questions]
+    session['attempt_id'] = attempt.id
+    session['exam_end_time'] = (
+        datetime.utcnow().timestamp() +
+        (exam.duration_minutes * 60)
+    )
+
+    first_question_id = session['question_order'][0]
+
+    return redirect(url_for(
+        'take_exam',
+        subject_id=subject_id,
+        question_id=first_question_id
+    ))
+
+# ---- 6. 📄 TAKE EXAM (AUTO SAVE + RESUME + NAVIGATION) ----
+@app.route('/exam/<int:subject_id>/question/<int:question_id>', methods=['GET'])
+@login_required(role='Student')
+def take_exam(subject_id, question_id):
+
+    attempt_id = session.get('attempt_id')
+
+    attempt = ExamAttempt.query.get(attempt_id)
+
+    if not attempt:
+        flash("No active attempt.", "danger")
+        return redirect(url_for('student_exams'))
+
+    question = Question.query.get_or_404(question_id)
+
+    # store last question (resume support)
+    attempt.last_question_id = question_id
+    db.session.commit()
+
+    time_left = int(session.get('exam_end_time', 0) - datetime.utcnow().timestamp())
+
+    if time_left <= 0:
+        return redirect(url_for('submit_exam', subject_id=subject_id))
+
+    return render_template(
+        'take_exam.html',
+        question=question,
+        time_left=time_left
+    )
+
+# ---- 7. 💾 AUTOSAVE ANSWERS ----
+@app.route('/save-answer', methods=['POST'])
+@login_required(role='Student')
+def save_answer():
+
+    data = request.get_json()
+
+    attempt_id = session.get('attempt_id')
+
+    answer = StudentAnswer.query.filter_by(
+        attempt_id=attempt_id,
+        question_id=data['question_id']
+    ).first()
+
+    if not answer:
+        answer = StudentAnswer(
+            attempt_id=attempt_id,
+            question_id=data['question_id'],
+            selected_answer=data['answer']
+        )
+        db.session.add(answer)
+    else:
+        answer.selected_answer = data['answer']
+
+    db.session.commit()
+
+    return {"status": "saved"}
+
+# ---- 8. 👀 TAB SWITCH LOGGER ----
+@app.route('/log-tab-switch', methods=['POST'])
+@login_required(role='Student')
+def log_tab_switch():
+
+    attempt = ExamAttempt.query.get(session.get('attempt_id'))
+
+    if attempt:
+        attempt.tab_switches += 1
+        db.session.commit()
+
+    return {"status": "logged"}
+
+# ---- 9. 🏁 SUBMIT EXAM (AUTO SCORING) ----
+@app.route('/exam/<int:subject_id>/submit')
+@login_required(role='Student')
+def submit_exam(subject_id):
+
+    student_id = session.get('user_id')
+
+    attempt = ExamAttempt.query.filter_by(
+        student_id=student_id,
+        subject_id=subject_id,
+        is_submitted=False
+    ).first()
+
+    if not attempt:
+        flash("No active attempt.", "danger")
+        return redirect(url_for('student_exams'))
+
+    answers = StudentAnswer.query.filter_by(attempt_id=attempt.id).all()
+
+    score = 0
+
+    for ans in answers:
+        question = Question.query.get(ans.question_id)
+
+        if question.correct_answer == ans.selected_answer:
+            ans.is_correct = True
+            score += question.points
+        else:
+            ans.is_correct = False
+
+    attempt.score = score
+    attempt.is_submitted = True
+    attempt.submitted_at = datetime.utcnow()
+
+    db.session.commit()
+
+    session.pop('attempt_id', None)
+    session.pop('question_order', None)
+    session.pop('exam_end_time', None)
+
+    flash(f"Exam submitted! Score: {score}", "success")
+
+    return redirect(url_for('student_exams'))
+
+# ---- 10. REAL-TIME TRACKER ----
+@app.route("/exam-status")
+def exam_status():
+    return jsonify({
+        "active": 2,
+        "ongoing": 1
+    })
+
+# ---- 11. Edit Exam ----
+@app.route('/edit-exam/<int:subject_id>', methods=['GET', 'POST'])
+@login_required(role='Admin')
+def edit_exam(subject_id):
+
+    subject = Subject.query.get_or_404(subject_id)
+
+    subjects = Subject.query.all()
+
+    if request.method == 'POST':
+
+        exam.subject_id = request.form.get(
+            'subject_id'
+        )
+
+        exam.title = request.form.get(
+            'title'
+        )
+
+        exam.exam_category = request.form.get(
+            'exam_category'
+        )
+
+        exam.academic_term = request.form.get(
+            'academic_term'
+        )
+
+        exam.description = request.form.get(
+            'description'
+        )
+
+        exam.duration_minutes = request.form.get(
+            'duration_minutes'
+        )
+
+        # OPTIONAL EXCEL REUPLOAD
+        file = request.files.get('questions_file')
+
+        if file and file.filename != '':
+
+            # DELETE OLD QUESTIONS
+            Question.query.filter_by(
+                subject_id=subject.id
+            ).delete()
+
+            if file.filename.endswith('.csv'):
+                df = pd.read_csv(file)
+            else:
+                df = pd.read_excel(file)
+
+            for _, row in df.iterrows():
+
+                question = Question(
+                    subject_id=subject.id,
+                    question_text=row['question'],
+                    choice_a=row['choice_a'],
+                    choice_b=row['choice_b'],
+                    choice_c=row['choice_c'],
+                    choice_d=row['choice_d'],
+                    correct_answer=row['correct_answer'],
+                    points=row['points']
+                )
+
+                db.session.add(question)
+
+        db.session.commit()
+
+        flash("Exam updated successfully!", "success")
+
+        return redirect(url_for('dashboard_admin'))
+
+    return render_template(
+        'edit_exam.html',
+        exam=exam,
+        subjects=subjects
+    )
+
+# ---- 12. Import Questions ----
+@app.route('/import-questions/<int:subject_id>', methods=['POST'])
+@login_required(role='Admin')
+def import_questions(subject_id):
+
+    subject = Subject.query.get_or_404(subject_id)
+    file = request.files.get('questions_file')
+
+    if not file:
+        flash("No file uploaded", "danger")
+        return redirect(url_for('edit_exam', subject_id=subject_id))
+
+    filename = secure_filename(file.filename)
+
+    try:
+        # READ FILE
+        if filename.endswith('.csv'):
+            df = pd.read_csv(file)
+        else:
+            df = pd.read_excel(file)
+
+        required_columns = [
+            'question',
+            'choice_a',
+            'choice_b',
+            'choice_c',
+            'choice_d',
+            'correct_answer',
+            'points'
+        ]
+
+        for col in required_columns:
+            if col not in df.columns:
+                flash(f"Missing column: {col}", "danger")
+                return redirect(url_for('edit_exam', subject_id=subject_id))
+
+        count = 0
+
+        for _, row in df.iterrows():
+
+            # OPTIONAL: prevent duplicates
+            existing = Question.query.filter_by(
+                subject_id=subject.id,
+                question_text=row['question']
+            ).first()
+
+            if existing:
+                continue
+
+            question = Question(
+                subject_id=subject.id,
+                question_text=row['question'],
+                choice_a=row['choice_a'],
+                choice_b=row['choice_b'],
+                choice_c=row['choice_c'],
+                choice_d=row['choice_d'],
+                correct_answer=str(row['correct_answer']).upper(),
+                points=int(row['points']) if not pd.isna(row['points']) else 1
+            )
+
+            db.session.add(question)
+            count += 1
+
+        db.session.commit()
+
+        flash(f"{count} questions imported successfully!", "success")
+
+    except Exception as e:
+        db.session.rollback()
+        flash(f"Error importing questions: {str(e)}", "danger")
+
+    return redirect(url_for('edit_exam', subject_id=subject_id))
+
+# =========================
+# EXPORT QUESTIONS
+# =========================
+@app.route('/export-questions/<int:subject_id>')
+@login_required(role='Admin')
+def export_questions(subject_id):
+
+    import pandas as pd
+    from flask import send_file
+    import io
+
+    subject = Subject.query.get_or_404(subject_id)
+
+    questions = Question.query.filter_by(
+        subject_id=subject.id
+    ).all()
+
+    data = []
+
+    for q in questions:
+
+        data.append({
+            'question': q.question_text,
+            'choice_a': q.choice_a,
+            'choice_b': q.choice_b,
+            'choice_c': q.choice_c,
+            'choice_d': q.choice_d,
+            'correct_answer': q.correct_answer,
+            'points': q.points
+        })
+
+    df = pd.DataFrame(data)
+
+    output = io.BytesIO()
+
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False)
+
+    output.seek(0)
+
+    filename = f"{subject.subject_code}_questions.xlsx"
+
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=filename,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    )
 
 # ---- Student Grades ----
 @app.route('/student/grades/<student_id>')
