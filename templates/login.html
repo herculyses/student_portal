@@ -13,16 +13,6 @@
 
     <style>
 
-        .password-wrapper{
-            position: relative;
-        }
-
-        .fake-password{
-            font-family: monospace;
-            letter-spacing: 2px;
-            caret-color: black;
-        }
-
         .toggle-password{
             position: absolute;
             top: 38px;
@@ -79,23 +69,15 @@
             </div>
 
             <!-- Password -->
-            <div class="mb-3 password-wrapper">
+            <div class="mb-3 position-relative">
 
-                <label class="form-label">
-                    Password
-                </label>
+                {{ form.password.label(class="form-label") }}
 
-                <!-- Real hidden password -->
-                <input type="hidden"
-                       name="password"
-                       id="realPassword">
-
-                <!-- Fake visible password -->
-                <input type="text"
-                       id="fakePassword"
-                       class="form-control fake-password pe-5"
-                       placeholder="Enter password"
-                       autocomplete="off">
+                {{ form.password(
+                    class="form-control pe-5",
+                    placeholder="Enter password",
+                    id="passwordField"
+                ) }}
 
                 <button type="button"
                         id="togglePassword"
@@ -130,104 +112,22 @@
 
 <script>
 
-const fakeInput = document.getElementById('fakePassword');
-const realInput = document.getElementById('realPassword');
+const passwordField = document.getElementById('passwordField');
 const toggleBtn = document.getElementById('togglePassword');
 
-let realPassword = '';
-let visible = false;
-
-// Update display
-function updateDisplay(showLast = true){
-
-    if(visible){
-        fakeInput.value = realPassword;
-        return;
-    }
-
-    let masked = '';
-
-    for(let i = 0; i < realPassword.length; i++){
-
-        // Show latest character only
-        if(i === realPassword.length - 1 && showLast){
-            masked += realPassword[i];
-        }else{
-            masked += '*';
-        }
-
-    }
-
-    fakeInput.value = masked;
-
-}
-
-// Detect typing
-fakeInput.addEventListener('keydown', function(e){
-
-    // Prevent normal typing
-    e.preventDefault();
-
-    // BACKSPACE
-    if(e.key === 'Backspace'){
-
-        realPassword = realPassword.slice(0, -1);
-
-        updateDisplay(false);
-
-        return;
-    }
-
-    // Ignore special keys
-    if(e.key.length > 1){
-        return;
-    }
-
-    // Add typed character
-    realPassword += e.key;
-
-    // Update hidden input
-    realInput.value = realPassword;
-
-    // Show latest typed character
-    updateDisplay(true);
-
-    // After 1 second convert last char to *
-    setTimeout(() => {
-
-        if(!visible){
-            updateDisplay(false);
-        }
-
-    }, 1000);
-
-});
-
-// Show / Hide password
 toggleBtn.addEventListener('click', () => {
 
-    visible = !visible;
+    if(passwordField.type === 'password'){
 
-    if(visible){
-
-        fakeInput.value = realPassword;
+        passwordField.type = 'text';
         toggleBtn.textContent = 'Hide';
 
     }else{
 
-        updateDisplay(false);
+        passwordField.type = 'password';
         toggleBtn.textContent = 'Show';
 
     }
-
-});
-
-// Prevent cursor moving
-fakeInput.addEventListener('click', () => {
-
-    setTimeout(() => {
-        fakeInput.selectionStart = fakeInput.selectionEnd = fakeInput.value.length;
-    }, 0);
 
 });
 
