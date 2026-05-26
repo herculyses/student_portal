@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>View Exams</title>
+
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+
+<script>
+if (localStorage.getItem("darkMode") === "true") {
+    document.documentElement.classList.add("dark-mode");
+}
+</script>
+
+<style>
+
+/* DARK MODE */
+.dark-mode {
+    background-color: #121212 !important;
+    color: #e0e0e0 !important;
+}
+
+.dark-mode .card {
+    background-color: #1e1e1e !important;
+    color: white !important;
+}
+
+.dark-mode .table {
+    color: white !important;
+}
+
+.dark-mode .table-light {
+    background-color: #2a2a2a !important;
+}
+
+.dark-mode .modal-content {
+    background-color: #1e1e1e !important;
+    color: white !important;
+}
+
+.dark-mode .btn-light {
+    background-color: #333 !important;
+    color: white !important;
+}
+
+</style>
+
+</head>
+
+<body class="bg-light">
+
+<div class="container py-4">
+
+    <!-- HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-4">
+
+        <h2>
+            <i class="bi bi-file-earmark-text"></i>
+            View Exams
+        </h2>
+
+        <a href="{{ url_for('dashboard_admin') }}"
+           class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i>
+            Back
+        </a>
+
+    </div>
+
+    <!-- EXAMS LOOP -->
+    {% for exam in exams %}
+
+    <div class="card shadow-sm mb-4">
+
+        <div class="card-body">
+
+            <!-- EXAM HEADER -->
+            <div class="d-flex justify-content-between align-items-center mb-3">
+
+                <div>
+                    <h4 class="mb-1">
+                        {{ exam.title }}
+                    </h4>
+
+<p class="mb-1">
+    {{ exam.section }}
+    |
+    {{ exam.year }}
+</p>
+
+<p class="text-muted">
+    {{ exam.semester }}
+    |
+    {{ exam.school_year }}
+</p>
+
+                    <p class="text-muted mb-0">
+                        {{ exam.subject.subject_code }}
+                        -
+                        {{ exam.subject.subject_name }}
+                    </p>
+                </div>
+
+                <div>
+
+                    {% if exam.is_active %}
+                        <span class="badge bg-success">
+                            Active
+                        </span>
+                    {% else %}
+                        <span class="badge bg-danger">
+                            Closed
+                        </span>
+                    {% endif %}
+
+                </div>
+
+            </div>
+
+            <!-- EXAM DETAILS -->
+            <div class="row mb-3">
+
+                <div class="col-md-3">
+                    <strong>Term:</strong>
+                    {{ exam.term or "N/A" }}
+                </div>
+
+                <div class="col-md-3">
+                    <strong>Type:</strong>
+                    {{ exam.exam_type or "N/A" }}
+                </div>
+
+                <div class="col-md-3">
+                    <strong>Duration:</strong>
+                    {{ exam.duration_minutes }} mins
+                </div>
+
+                <div class="col-md-3">
+                    <strong>ID:</strong>
+                    {{ exam.id }}
+                </div>
+
+            </div>
+
+            <!-- STUDENTS -->
+            <div class="table-responsive">
+
+                <table class="table table-bordered table-hover align-middle">
+
+                    <thead class="table-light text-center">
+
+                        <tr>
+                            <th>Student ID</th>
+                            <th>Name</th>
+                            <th>Year</th>
+                            <th>Section</th>
+                            <th>Semester</th>
+                            <th>School Year</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+
+                    </thead>
+
+                    <tbody>
+
+                    {% for student in students %}
+
+                        {% if student.subject == exam.subject.subject_name %}
+
+                        <tr>
+
+                            <td>{{ student.student_id }}</td>
+
+                            <td>{{ student.name }}</td>
+
+                            <td>{{ student.year }}</td>
+
+                            <td>{{ student.section }}</td>
+
+                            <td>{{ student.semester }}</td>
+
+                            <td>{{ student.school_year }}</td>
+
+                            <td class="text-center">
+
+                                <span class="badge bg-warning text-dark">
+                                    Waiting
+                                </span>
+
+                            </td>
+
+                            <td class="text-center">
+
+                                <a href="{{ url_for(
+                                    'approve_exam_student',
+                                    exam_id=exam.id,
+                                    student_id=student.student_id
+                                ) }}"
+                                class="btn btn-success btn-sm">
+
+                                    <i class="bi bi-check-circle"></i>
+                                    Approve
+
+                                </a>
+
+                            </td>
+
+                        </tr>
+
+                        {% endif %}
+
+                    {% endfor %}
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    </div>
+
+    {% else %}
+
+    <div class="alert alert-info">
+        No exams found.
+    </div>
+
+    {% endfor %}
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+</body>
+</html>

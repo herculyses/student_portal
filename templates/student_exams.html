@@ -139,32 +139,35 @@ if (localStorage.getItem("darkMode") === "true") {
 
     <h3 class="mb-4">Available Exams</h3>
 
+{% if exams %}
     {% for exam in exams %}
+        <div class="card mb-3 shadow-sm">
+            <div class="card-body">
 
-    <div class="card mb-3 shadow-sm">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">{{ exam.title }}</h5>
+                    <span class="badge bg-success">Active</span>
+                </div>
 
-        <div class="card-body">
+                <p class="text-muted mb-1">
+                    {{ exam.subject.subject_name if exam.subject else "No Subject" }}
+                </p>
 
-            <h5>{{ exam.title }}</h5>
+                <p>Duration: {{ exam.duration_minutes }} minutes</p>
 
-            <p class="text-muted mb-1">
-                {{ exam.subject.subject_name }}
-            </p>
+                <a href="{{ url_for('start_exam', exam_id=exam.id) }}"
+                   class="btn btn-primary">
+                    Start Exam
+                </a>
 
-            <p>
-                Duration: {{ exam.duration_minutes }} minutes
-            </p>
-
-            <a href="{{ url_for('start_exam', exam_id=exam.id) }}"
-               class="btn btn-primary">
-                Start Exam
-            </a>
-
+            </div>
         </div>
-
-    </div>
-
     {% endfor %}
+{% else %}
+    <div class="alert alert-info">
+        No exams available right now.
+    </div>
+{% endif %}
 
 </div>
 

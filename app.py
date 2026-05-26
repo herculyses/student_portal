@@ -13,9 +13,11 @@ from flask_wtf.csrf import CSRFProtect
 from urllib.parse import unquote
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
+from flask_migrate import Migrate
+
 import pandas as pd
 import time
-import os, csv
+import os
 import csv
 import io
 
@@ -25,9 +27,12 @@ app.config['SECRET_KEY'] = 'your_secret_key'
 
 # --- Ensure upload folder exists ---
 basedir = os.path.abspath(os.path.dirname(__file__))
+
 UPLOAD_FOLDER = os.path.join(basedir, 'uploads')
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
+
 ALLOWED_EXTENSIONS = {'csv'}
 
 # --- Neon PostgreSQL (persistent) ---
@@ -45,14 +50,11 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# --- Database ---
 db = SQLAlchemy(app)
 
-# --- Upload settings ---
-basedir = os.path.abspath(os.path.dirname(__file__))
-UPLOAD_FOLDER = os.path.join(basedir, 'uploads')
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-ALLOWED_EXTENSIONS = {'csv'}
+# --- Flask-Migrate ---
+migrate = Migrate(app, db)
 
 # --- Models ---
 class User(db.Model):
@@ -205,8 +207,16 @@ class Exam(db.Model):
 
     title = db.Column(db.String(200), nullable=False)
 
-    term = db.Column(db.String(50))        # NEW
-    exam_type = db.Column(db.String(50))   # NEW
+    term = db.Column(db.String(50))       
+    exam_type = db.Column(db.String(50))  
+
+    section = db.Column(db.String(50))
+
+    year = db.Column(db.String(20))
+
+    school_year = db.Column(db.String(20))
+
+    semester = db.Column(db.String(20))
 
     description = db.Column(db.Text)
 
@@ -218,6 +228,12 @@ class Exam(db.Model):
         db.DateTime,
         default=datetime.utcnow
     )
+
+attempts = db.relationship(
+    'ExamAttempt',
+    backref='exam',
+    lazy=True
+)
 
 class Question(db.Model):
     __tablename__ = 'questions'
@@ -251,7 +267,7 @@ class ExamAttempt(db.Model):
         nullable=False
     )
 
-    subject_id = db.Column(
+    exam_id = db.Column(
         db.Integer,
         db.ForeignKey('exams.id'),
         nullable=False
@@ -277,6 +293,57 @@ class ExamAttempt(db.Model):
         cascade="all, delete"
     )
 
+class ExamAccess(db.Model):
+    __tablename__ = 'exam_access'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    exam_id = db.Column(
+        db.Integer,
+        db.ForeignKey('exams.id'),
+        nullable=False
+    )
+
+    student_id = db.Column(
+        db.String(100),
+        nullable=False
+    )
+
+    subject = db.Column(db.String(100))
+
+    section = db.Column(db.String(50))
+
+    year = db.Column(db.String(20))
+
+    school_year = db.Column(db.String(20))
+
+    semester = db.Column(db.String(20))
+
+    is_present = db.Column(
+        db.Boolean,
+        default=False
+    )
+
+    is_allowed = db.Column(
+        db.Boolean,
+        default=False
+    )
+
+    has_started = db.Column(
+        db.Boolean,
+        default=False
+    )
+
+    has_finished = db.Column(
+        db.Boolean,
+        default=False
+    )
+
+    approved_by = db.Column(db.String(100))
+
+    approved_at = db.Column(
+        db.DateTime
+    )
 
 class StudentAnswer(db.Model):
     __tablename__ = 'student_answers'
@@ -691,7 +758,10 @@ def dashboard_admin():
     subjects = Subject.query.order_by(Subject.id.desc()).all()
 
     # FETCH EXAMS
-    exams = Exam.query.order_by(Exam.created_at.desc()).all()
+    exams = Exam.query.all()
+
+    # FETCH QUESTIONS
+    all_questions = Question.query.all()
     
     # Render template
     return render_template(
@@ -746,6 +816,12 @@ def dashboard_student():
     # FETCH SUBJECTS
     subjects = Subject.query.all()
 
+    # exam mechanics
+    allowed_exams = ExamAccess.query.filter_by(
+        student_id=student_id,
+        is_allowed=True
+    ).all()
+
     return render_template(
         "dashboard_student.html",
         students=students,
@@ -753,7 +829,6 @@ def dashboard_student():
         role=role,
         subjects=subjects
     )
-
 
 # View Student (Admin)
 @app.route('/admin/view_student/<student_id>')
@@ -915,7 +990,7 @@ def add_subject():
 
     return redirect(url_for('dashboard_admin', open_exam=1))
 
-# ---- 2. 🧠 CREATE EXAM ----
+# ---- 2.1 🧠 CREATE EXAM ----
 @app.route('/create-exam', methods=['GET', 'POST'])
 @login_required(role=['Instructor', 'Admin'])
 def create_exam():
@@ -943,13 +1018,39 @@ def create_exam():
         db.session.commit()
 
         flash("Exam created successfully", "success")
-        return redirect(url_for('add_question', subject_id=subject.id))
 
-    return render_template("create_exam.html", form=form)
+        return redirect(
+            url_for(
+                'add_question',
+                subject_id=form.subject_id.data
+            )
+        )
 
-# ---- 3. ✏️ ADD QUESTION ----
+    return render_template(
+        "create_exam.html",
+        form=form
+    )
+
+# ---- 2.2 👀🧠 VIEW EXAMS PAGE ----
+@app.route('/view-exams')
+@login_required(role=['Admin', 'Instructor'])
+def view_exams():
+
+    exams = Exam.query.order_by(
+        Exam.created_at.desc()
+    ).all()
+
+    students = Student.query.all()
+
+    return render_template(
+        'view_exams.html',
+        exams=exams,
+        students=students
+    )
+
+# ---- 3.1 ✏️ ADD QUESTION ----
 @app.route('/add-question/<int:subject_id>', methods=['GET', 'POST'])
-@login_required(role='Admin')
+@login_required(role=['Instructor', 'Admin'])
 def add_question(subject_id):
 
     subject = Subject.query.get_or_404(subject_id)
@@ -985,12 +1086,52 @@ def add_question(subject_id):
         subject_id=subject.id
     ).all()
 
+    # FOR IMPORT DROPDOWN
+    subjects = Subject.query.all()
+
+    all_questions = Question.query.all()
+
     return render_template(
         'add_question.html',
         form=form,
         subject=subject,
-        questions=questions
+        questions=questions,
+        subjects=subjects,
+        all_questions=all_questions
     )
+
+# ---- 3.2 ✏️ IMPORT QUESTION ----
+@app.route('/import-existing-questions/<int:subject_id>', methods=['POST'])
+@login_required(role=['Instructor', 'Admin'])
+def import_existing_questions(subject_id):
+
+    selected_ids = request.form.getlist('question_ids')
+
+    for qid in selected_ids:
+
+        original = Question.query.get(qid)
+
+        if original:
+
+            new_question = Question(
+                subject_id=subject_id,
+
+                question_text=original.question_text,
+                choice_a=original.choice_a,
+                choice_b=original.choice_b,
+                choice_c=original.choice_c,
+                choice_d=original.choice_d,
+                correct_answer=original.correct_answer,
+                points=original.points
+            )
+
+            db.session.add(new_question)
+
+    db.session.commit()
+
+    flash('Questions imported successfully!', 'success')
+
+    return redirect(url_for('add_questions', subject_id=subject_id))
 
 # ---- 4. 📚 STUDENT EXAMS LIST ----
 @app.route('/student/exams')
@@ -1002,31 +1143,40 @@ def student_exams():
     return render_template('student_exams.html', exams=exams)
 
 # ---- 5. 🚀 START EXAM (RESUME + RANDOMIZE + TIMER) ----
-@app.route('/exam/<int:subject_id>/start')
+@app.route('/exam/<int:exam_id>/start')
 @login_required(role='Student')
-def start_exam(subject_id):
+def start_exam(exam_id):
 
+    access = ExamAccess.query.filter_by(
+        student_id=session['student_id'],
+        exam_id=exam_id,
+        is_allowed=True
+    ).first()
+
+    if not access:
+        flash("You are not allowed to take this exam.")
+        return redirect(url_for('dashboard_student'))
+
+    exam = Exam.query.get_or_404(exam_id)
+    subject = exam.subject
     student_id = session.get('user_id')
-    subject = Subject.query.get_or_404(subject_id)
 
     attempt = ExamAttempt.query.filter_by(
         student_id=student_id,
-        subject_id=subject_id,
+        exam_id=exam_id,
         is_submitted=False
     ).first()
 
     if not attempt:
         attempt = ExamAttempt(
             student_id=student_id,
-            subject_id=subject_id
+            exam_id=exam_id
         )
         db.session.add(attempt)
         db.session.commit()
 
-    # RANDOMIZE QUESTIONS
-    questions = Question.query.filter_by(subject_id=subject_id).all()
-
     import random
+    questions = Question.query.filter_by(exam_id=exam_id).all()
     random.shuffle(questions)
 
     session['question_order'] = [q.id for q in questions]
@@ -1040,7 +1190,7 @@ def start_exam(subject_id):
 
     return redirect(url_for(
         'take_exam',
-        subject_id=subject_id,
+        exam_id=exam.id,
         question_id=first_question_id
     ))
 

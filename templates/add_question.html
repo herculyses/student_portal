@@ -172,7 +172,10 @@ if (localStorage.getItem("darkMode") === "true") {
                         Import Questions
                     </h5>
 
-                    <div class="card bg-light border">
+                    <!-- ============================= -->
+                    <!-- EXCEL IMPORT -->
+                    <!-- ============================= -->
+                    <div class="card bg-light border mb-4">
 
                         <div class="card-body">
 
@@ -210,24 +213,140 @@ if (localStorage.getItem("darkMode") === "true") {
 
                                 </div>
 
-<div class="d-grid gap-2">
+                                <div class="d-grid gap-2">
 
-    <button type="submit"
-            class="btn btn-primary">
+                                    <button type="submit"
+                                            class="btn btn-primary">
 
-        Import All Questions
+                                        Import All Questions
 
-    </button>
+                                    </button>
 
-    <!-- EXPORT BUTTON -->
-    <a href="{{ url_for('export_questions', subject_id=subject.id) }}"
-       class="btn btn-success">
+                                    <!-- EXPORT BUTTON -->
+                                    <a href="{{ url_for('export_questions', subject_id=subject.id) }}"
+                                       class="btn btn-success">
 
-       Export Questions
+                                       Export Questions
 
-    </a>
+                                    </a>
+
+                                </div>
+
+                            </form>
+
+                        </div>
+
+                    </div>
+
+                    <!-- ============================= -->
+                    <!-- DATABASE IMPORT -->
+                    <!-- ============================= -->
+                    <div class="card border shadow-sm">
+
+                        <div class="card-header bg-primary text-white">
+                            Import Existing Questions
+                        </div>
+
+                        <div class="card-body">
+
+                            <form method="POST"
+                                  action="{{ url_for('import_existing_questions', subject_id=subject.id) }}">
+
+                                <!-- SUBJECT DROPDOWN -->
+                                <div class="mb-3">
+
+                                    <label class="form-label">
+                                        Select Subject
+                                    </label>
+
+                                    <select id="subjectSelect"
+                                            class="form-select">
+
+                                        <option value="">
+                                            -- Select Subject --
+                                        </option>
+
+                                        {% for s in subjects %}
+
+                                        <option value="{{ s.id }}">
+                                            {{ s.subject_code }} - {{ s.subject_name }}
+                                        </option>
+
+                                        {% endfor %}
+
+                                    </select>
+
+                                </div>
+
+                                <!-- QUESTIONS LIST -->
+                                <div class="mb-3">
+
+<!-- QUESTIONS DROPDOWN -->
+<div class="mb-3">
+
+    <label class="form-label">
+        Select Questions
+    </label>
+
+    <div class="dropdown w-100">
+
+        <!-- TOGGLE BUTTON -->
+        <button class="btn btn-light border w-100 dropdown-toggle"
+                type="button"
+                data-bs-toggle="dropdown"
+                aria-expanded="false">
+
+            Select Questions
+
+        </button>
+
+        <!-- DROPDOWN MENU -->
+        <div class="dropdown-menu w-100 p-2"
+             style="max-height:300px; overflow-y:auto;">
+
+            {% for q in all_questions %}
+
+            <div class="form-check">
+
+                <input class="form-check-input question-checkbox"
+                       type="checkbox"
+                       name="question_ids"
+                       value="{{ q.id }}"
+                       id="q{{ q.id }}">
+
+                <label class="form-check-label"
+                       for="q{{ q.id }}">
+
+                    {{ q.question_text }}
+
+                </label>
+
+            </div>
+
+            {% endfor %}
+
+        </div>
+
+    </div>
 
 </div>
+
+<small id="selectedCount" class="text-muted">
+    0 questions selected
+</small>
+                                </div>
+
+                                <div class="d-grid">
+
+                                    <button type="submit"
+                                            class="btn btn-primary">
+
+                                        Import Selected Questions
+
+                                    </button>
+
+                                </div>
+
                             </form>
 
                         </div>
@@ -340,39 +459,41 @@ if (localStorage.getItem("darkMode") === "true") {
                     {% if questions %}
 
                     <div style="max-height:500px; overflow-y:auto;">
-                    <ul class="list-group">
 
-                        {% for q in questions %}
+                        <ul class="list-group">
 
-                        <li class="list-group-item">
+                            {% for q in questions %}
 
-                            <strong>
-                                {{ q.question_text }}
-                            </strong>
+                            <li class="list-group-item">
 
-                            <br><br>
+                                <strong>
+                                    {{ q.question_text }}
+                                </strong>
 
-                            A. {{ q.choice_a }} <br>
-                            B. {{ q.choice_b }} <br>
-                            C. {{ q.choice_c }} <br>
-                            D. {{ q.choice_d }}
+                                <br><br>
 
-                            <br><br>
+                                A. {{ q.choice_a }} <br>
+                                B. {{ q.choice_b }} <br>
+                                C. {{ q.choice_c }} <br>
+                                D. {{ q.choice_d }}
 
-                            <span class="badge bg-success">
-                                Correct Answer:
-                                {{ q.correct_answer }}
-                            </span>
+                                <br><br>
 
-                            <span class="badge bg-primary">
-                                {{ q.points }} pts
-                            </span>
+                                <span class="badge bg-success">
+                                    Correct Answer:
+                                    {{ q.correct_answer }}
+                                </span>
 
-                        </li>
+                                <span class="badge bg-primary">
+                                    {{ q.points }} pts
+                                </span>
 
-                        {% endfor %}
+                            </li>
 
-                    </ul>
+                            {% endfor %}
+
+                        </ul>
+
                     </div>
 
                     {% else %}
@@ -396,5 +517,50 @@ if (localStorage.getItem("darkMode") === "true") {
 <!-- Bootstrap JS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
+<!-- SUBJECT FILTER SCRIPT -->
+<script>
+
+const subjectSelect = document.getElementById('subjectSelect');
+
+subjectSelect.addEventListener('change', function () {
+
+    const selectedSubject = this.value;
+
+    const questions = document.querySelectorAll('.question-item');
+
+    questions.forEach(question => {
+
+        if (question.dataset.subject === selectedSubject) {
+
+            question.style.display = 'block';
+
+        } else {
+
+            question.style.display = 'none';
+
+        }
+
+    });
+
+});
+
+</script>
+<script>
+
+const checkboxes = document.querySelectorAll('.question-checkbox');
+const counter = document.getElementById('selectedCount');
+
+function updateCount() {
+
+    const checked = document.querySelectorAll('.question-checkbox:checked').length;
+
+    counter.textContent = checked + " questions selected";
+}
+
+checkboxes.forEach(cb => {
+    cb.addEventListener('change', updateCount);
+});
+
+</script>
 </body>
 </html>
