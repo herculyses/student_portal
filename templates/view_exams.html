@@ -16,8 +16,6 @@ if (localStorage.getItem("darkMode") === "true") {
 </script>
 
 <style>
-
-/* DARK MODE */
 .dark-mode {
     background-color: #121212 !important;
     color: #e0e0e0 !important;
@@ -36,16 +34,19 @@ if (localStorage.getItem("darkMode") === "true") {
     background-color: #2a2a2a !important;
 }
 
-.dark-mode .modal-content {
-    background-color: #1e1e1e !important;
-    color: white !important;
-}
-
 .dark-mode .btn-light {
     background-color: #333 !important;
     color: white !important;
 }
 
+/* Delete button separation */
+.delete-zone {
+    border-top: 1px solid #dc3545;
+    margin-top: 15px;
+    padding-top: 10px;
+    display: flex;
+    justify-content: flex-end;
+}
 </style>
 
 </head>
@@ -56,102 +57,99 @@ if (localStorage.getItem("darkMode") === "true") {
 
     <!-- HEADER -->
     <div class="d-flex justify-content-between align-items-center mb-4">
-
         <h2>
             <i class="bi bi-file-earmark-text"></i>
             View Exams
         </h2>
 
-        <a href="{{ url_for('dashboard_admin') }}"
-           class="btn btn-secondary">
-            <i class="bi bi-arrow-left"></i>
-            Back
+        <a href="{{ url_for('dashboard_admin') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Back
         </a>
-
     </div>
 
     <!-- EXAMS LOOP -->
     {% for exam in exams %}
 
     <div class="card shadow-sm mb-4">
-
         <div class="card-body">
 
-            <!-- EXAM HEADER -->
-            <div class="d-flex justify-content-between align-items-center mb-3">
+            <!-- HEADER INFO -->
+            <div class="d-flex justify-content-between align-items-start mb-3">
 
                 <div>
-                    <h4 class="mb-1">
-                        {{ exam.title }}
-                    </h4>
+                    <h4 class="mb-1">{{ exam.title }}</h4>
 
-<p class="mb-1">
-    {{ exam.section }}
-    |
-    {{ exam.year }}
-</p>
-
-<p class="text-muted">
-    {{ exam.semester }}
-    |
-    {{ exam.school_year }}
-</p>
-
-                    <p class="text-muted mb-0">
-                        {{ exam.subject.subject_code }}
-                        -
-                        {{ exam.subject.subject_name }}
+                    <p class="text-muted mb-1">
+                        {{ exam.subject.subject_code }} - {{ exam.subject.subject_name }}
                     </p>
+
+                    <small class="text-muted">
+                        {{ exam.term or "No Term" }} |
+                        {{ exam.exam_type or "No Type" }} |
+                        {{ exam.duration_minutes }} mins
+                    </small>
                 </div>
 
                 <div>
-
                     {% if exam.is_active %}
-                        <span class="badge bg-success">
-                            Active
-                        </span>
+                        <span class="badge bg-success">Active</span>
                     {% else %}
-                        <span class="badge bg-danger">
-                            Closed
-                        </span>
+                        <span class="badge bg-danger">Closed</span>
                     {% endif %}
-
                 </div>
 
             </div>
 
-            <!-- EXAM DETAILS -->
-            <div class="row mb-3">
+            <!-- ACTION BUTTONS -->
+            <div class="d-flex flex-wrap gap-2 mb-3">
 
-                <div class="col-md-3">
-                    <strong>Term:</strong>
-                    {{ exam.term or "N/A" }}
-                </div>
+                <a href="{{ url_for('edit_exam', exam_id=exam.id) }}"
+                   class="btn btn-primary btn-sm">
+                    <i class="bi bi-pencil"></i> Edit Exam
+                </a>
 
-                <div class="col-md-3">
-                    <strong>Type:</strong>
-                    {{ exam.exam_type or "N/A" }}
-                </div>
+                <a href="{{ url_for('add_question', exam_id=exam.id) }}"
+                   class="btn btn-success btn-sm">
+                    <i class="bi bi-plus-circle"></i> Add Questions
+                </a>
 
-                <div class="col-md-3">
-                    <strong>Duration:</strong>
-                    {{ exam.duration_minutes }} mins
-                </div>
+                <form method="POST"
+                      action="{{ url_for('admin_start_exam', exam_id=exam.id) }}"
+                      style="display:inline;">
+                    <button class="btn btn-warning btn-sm">
+                        <i class="bi bi-play-circle"></i> Start
+                    </button>
+                </form>
 
-                <div class="col-md-3">
-                    <strong>ID:</strong>
-                    {{ exam.id }}
-                </div>
+                <form method="POST"
+                      action="{{ url_for('end_exam', exam_id=exam.id) }}"
+                      style="display:inline;">
+                    <button class="btn btn-danger btn-sm">
+                        <i class="bi bi-stop-circle"></i> End
+                    </button>
+                </form>
 
             </div>
 
-            <!-- STUDENTS -->
-            <div class="table-responsive">
+            <!-- DELETE BUTTON (SEPARATED RIGHT SIDE) -->
+            <div class="delete-zone">
+
+                <button class="btn btn-outline-danger btn-sm"
+                        data-bs-toggle="modal"
+                        data-bs-target="#deleteModal"
+                        onclick="setDeleteExam({{ exam.id }}, '{{ exam.title }}')">
+
+                    <i class="bi bi-trash"></i> Delete Exam
+                </button>
+
+            </div>
+
+            <!-- STUDENTS TABLE -->
+            <div class="table-responsive mt-3">
 
                 <table class="table table-bordered table-hover align-middle">
 
                     <thead class="table-light text-center">
-
                         <tr>
                             <th>Student ID</th>
                             <th>Name</th>
@@ -162,7 +160,6 @@ if (localStorage.getItem("darkMode") === "true") {
                             <th>Status</th>
                             <th>Action</th>
                         </tr>
-
                     </thead>
 
                     <tbody>
@@ -172,41 +169,30 @@ if (localStorage.getItem("darkMode") === "true") {
                         {% if student.subject == exam.subject.subject_name %}
 
                         <tr>
-
                             <td>{{ student.student_id }}</td>
-
                             <td>{{ student.name }}</td>
-
                             <td>{{ student.year }}</td>
-
                             <td>{{ student.section }}</td>
-
                             <td>{{ student.semester }}</td>
-
                             <td>{{ student.school_year }}</td>
 
-                            <td class="text-center">
-
-                                <span class="badge bg-warning text-dark">
-                                    Waiting
-                                </span>
-
+                            <td>
+                                {% if exam.is_active %}
+                                    <span class="badge bg-success">Allowed</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark">Waiting</span>
+                                {% endif %}
                             </td>
 
-                            <td class="text-center">
-
+                            <td>
                                 <a href="{{ url_for(
                                     'approve_exam_student',
                                     exam_id=exam.id,
                                     student_id=student.student_id
                                 ) }}"
                                 class="btn btn-success btn-sm">
-
-                                    <i class="bi bi-check-circle"></i>
                                     Approve
-
                                 </a>
-
                             </td>
 
                         </tr>
@@ -222,7 +208,6 @@ if (localStorage.getItem("darkMode") === "true") {
             </div>
 
         </div>
-
     </div>
 
     {% else %}
@@ -235,7 +220,50 @@ if (localStorage.getItem("darkMode") === "true") {
 
 </div>
 
+<!-- DELETE CONFIRMATION MODAL -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title">
+            <i class="bi bi-exclamation-triangle"></i> Confirm Delete
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        <p>Are you sure you want to delete this exam?</p>
+        <p class="fw-bold text-danger" id="examTitle"></p>
+        <small class="text-muted">This action cannot be undone.</small>
+      </div>
+
+      <div class="modal-footer">
+
+        <form method="POST" id="deleteForm">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                Cancel
+            </button>
+
+            <button type="submit" class="btn btn-danger">
+                <i class="bi bi-trash"></i> Delete
+            </button>
+        </form>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+function setDeleteExam(id, title) {
+    document.getElementById("examTitle").innerText = title;
+    document.getElementById("deleteForm").action = "/delete-exam/" + id;
+}
+</script>
 
 </body>
 </html>

@@ -199,11 +199,11 @@ if (localStorage.getItem("darkMode") === "true") {
             Exam Type
         </label>
 
-        <select name="exam_category"
+        <select name="exam_type"
                 class="form-control">
 
             <option value="Quiz"
-                {% if exam.exam_category == 'Quiz' %}
+                {% if exam.exam_type == 'Quiz' %}
                     selected
                 {% endif %}
             >
@@ -211,7 +211,7 @@ if (localStorage.getItem("darkMode") === "true") {
             </option>
 
             <option value="Major Exam"
-                {% if exam.exam_category == 'Major Exam' %}
+                {% if exam.exam_type == 'Major Exam' %}
                     selected
                 {% endif %}
             >
@@ -219,7 +219,7 @@ if (localStorage.getItem("darkMode") === "true") {
             </option>
 
             <option value="Activity"
-                {% if exam.exam_category == 'Activity' %}
+                {% if exam.exam_type == 'Activity' %}
                     selected
                 {% endif %}
             >
@@ -237,13 +237,13 @@ if (localStorage.getItem("darkMode") === "true") {
             Academic Term
         </label>
 
-        <select name="academic_term"
+        <select name="term"
                 class="form-control">
 
-            <option value="Prelim">Prelim</option>
-            <option value="Midterm">Midterm</option>
-            <option value="Semi-Final">Semi-Final</option>
-            <option value="Final">Final</option>
+            <option value="Prelim" {% if exam.term == 'Prelim' %}selected{% endif %}>Prelim</option>
+            <option value="Midterm" {% if exam.term == 'Midterm' %}selected{% endif %}>Midterm</option>
+            <option value="Semi-Final" {% if exam.term == 'Semi-Final' %}selected{% endif %}>Semi-Final</option>
+            <option value="Final" {% if exam.term == 'Final' %}selected{% endif %}>Final</option>
 
         </select>
 
@@ -303,7 +303,7 @@ if (localStorage.getItem("darkMode") === "true") {
 
         </button>
 
-        <a href="{{ url_for('dashboard_admin') }}"
+        <a href="{{ url_for('view_exams') }}"
            class="btn btn-secondary">
 
            Back

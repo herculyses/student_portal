@@ -5,11 +5,17 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<title>Add Question</title>
+<title>Add Question Builder</title>
 
-<!-- Bootstrap -->
+<!-- BOOTSTRAP -->
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
       rel="stylesheet">
+
+<!-- BOOTSTRAP JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- SORTABLE -->
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 
 <script>
 if (localStorage.getItem("darkMode") === "true") {
@@ -19,98 +25,67 @@ if (localStorage.getItem("darkMode") === "true") {
 
 <style>
 
-/* ================= DARK MODE ================= */
+/* ===================================== */
+/* DARK MODE */
+/* ===================================== */
 
 .dark-mode {
     background-color: #121212 !important;
     color: #e0e0e0 !important;
 }
 
-/* NAVBAR */
-.dark-mode .navbar {
-    background-color: #1a1a1a !important;
-}
-
-.dark-mode .navbar-brand {
-    color: #ffffff !important;
-}
-
-/* CARD + CONTAINER */
 .dark-mode .container,
-.dark-mode .card {
+.dark-mode .card,
+.dark-mode .modal-content,
+.dark-mode .list-group-item {
     background-color: #1e1e1e !important;
-    color: #e0e0e0 !important;
+    color: white !important;
 }
 
-/* TEXT */
-.dark-mode h1,
-.dark-mode h2,
-.dark-mode h3,
-.dark-mode h4,
-.dark-mode h5,
-.dark-mode h6,
-.dark-mode p,
-.dark-mode span,
-.dark-mode small,
-.dark-mode label {
-    color: #e0e0e0 !important;
-}
-
-/* TABLE */
-.dark-mode table {
-    background-color: #1e1e1e !important;
-    color: #ffffff !important;
-    border-color: #333 !important;
-}
-
-.dark-mode thead th {
-    background-color: #2a2a2a !important;
-    color: #ffffff !important;
-}
-
-.dark-mode tbody td {
-    background-color: #1e1e1e !important;
-    color: #ffffff !important;
-}
-
-/* FORM */
 .dark-mode .form-control,
 .dark-mode .form-select {
     background-color: #2a2a2a !important;
-    color: #ffffff !important;
+    color: white !important;
     border: 1px solid #444 !important;
 }
 
-/* BUTTONS */
-.dark-mode .btn-light {
-    background-color: #333 !important;
-    color: #fff !important;
-    border: 1px solid #555 !important;
+.dark-mode .form-control::placeholder {
+    color: #aaa !important;
 }
 
-.dark-mode .btn-success {
-    background-color: #1f6f3b !important;
-}
-
-.dark-mode .btn-primary {
-    background-color: #0d47a1 !important;
-}
-
-/* CARD HEADER */
 .dark-mode .card-header {
     background-color: #14532d !important;
 }
 
-/* LIST GROUP */
-.dark-mode .list-group-item {
-    background-color: #1e1e1e !important;
-    color: #ffffff !important;
-    border-color: #333 !important;
+.dark-mode .border-end {
+    border-color: #444 !important;
 }
 
-/* BACKGROUND */
-.dark-mode .bg-light {
-    background-color: #121212 !important;
+/* ===================================== */
+/* QUESTION CARDS */
+/* ===================================== */
+
+.question-card {
+    border-left: 5px solid #198754;
+    transition: 0.2s ease;
+}
+
+.question-card:hover {
+    transform: scale(1.01);
+}
+
+.drag-handle {
+    cursor: move;
+}
+
+.preview-box {
+    background: rgba(0,0,0,0.03);
+    border-radius: 8px;
+    padding: 10px;
+}
+
+.dark-mode .preview-box {
+    background: rgba(255,255,255,0.05);
 }
 
 </style>
@@ -121,209 +96,404 @@ if (localStorage.getItem("darkMode") === "true") {
 
 <div class="container py-4">
 
-    <!-- PAGE CARD -->
-    <div class="card shadow-sm">
+<div class="card shadow-sm">
 
-        <!-- HEADER -->
-        <div class="card-header bg-success text-white">
+<!-- ===================================== -->
+<!-- HEADER -->
+<!-- ===================================== -->
 
-            <div class="d-flex justify-content-between align-items-center">
+<div class="card-header bg-success text-white">
 
-                <h4 class="mb-0">
-                    Add Questions - {{ subject.subject_code }} - {{ subject.subject_name }}
-                </h4>
+    <div class="d-flex justify-content-between align-items-center">
 
-                <a href="{{ url_for('dashboard_admin') }}"
-                   class="btn btn-light btn-sm">
-                    Back
-                </a>
+        <h4 class="mb-0">
 
-            </div>
+            Add Questions -
+            {{ exam.subject.subject_code if exam.subject else 'Unknown' }}
+
+        </h4>
+
+        <div class="d-flex gap-2">
+
+            <!-- ADMIN -->
+            <a href="{{ url_for('dashboard_admin') }}"
+               class="btn btn-light btn-sm">
+
+                Admin
+
+            </a>
+
+            <!-- VIEW EXAMS -->
+            <a href="{{ url_for('view_exams') }}"
+               class="btn btn-primary btn-sm">
+
+                View Exams
+
+            </a>
 
         </div>
 
-        <!-- BODY -->
+    </div>
+
+</div>
+
+<!-- ===================================== -->
+<!-- BODY -->
+<!-- ===================================== -->
+
+<div class="card-body">
+
+<div class="row">
+
+<!-- ===================================== -->
+<!-- LEFT SIDE -->
+<!-- ===================================== -->
+
+<div class="col-md-4 border-end">
+
+    <h5 class="mb-3">
+
+        Import Questions
+
+    </h5>
+
+    <!-- ================================= -->
+    <!-- IMPORT EXCEL -->
+    <!-- ================================= -->
+
+    <div class="card bg-light mb-3 shadow-sm">
+
         <div class="card-body">
 
-            <!-- FLASH MESSAGES -->
-            {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
+            <form method="POST"
+                  enctype="multipart/form-data"
+                  action="{{ url_for('import_questions',
+                                     subject_id=exam.subject.id) }}">
 
-                {% for category, message in messages %}
+                <div class="mb-3">
 
-                <div class="alert alert-{{ category }}">
-                    {{ message }}
+                    <label class="form-label fw-bold">
+
+                        Upload Excel / CSV
+
+                    </label>
+
+                    <input type="file"
+                           name="questions_file"
+                           class="form-control"
+                           required>
+
+                    <small class="text-muted">
+
+                        Upload multiple questions instantly.
+
+                    </small>
+
                 </div>
 
-                {% endfor %}
+                <!-- GUIDE -->
+                <div class="alert alert-info small">
 
-            {% endif %}
-            {% endwith %}
+                    <strong>Excel Columns:</strong>
 
-            <!-- MAIN ROW -->
-            <div class="row">
+                    <hr>
 
-                <!-- ================================= -->
-                <!-- LEFT SIDE : IMPORT QUESTIONS -->
-                <!-- ================================= -->
-                <div class="col-md-4 border-end">
+                    question |
+                    question_type |
+                    choice_a |
+                    choice_b |
+                    choice_c |
+                    choice_d |
+                    correct_answer |
+                    points
 
-                    <h5 class="mb-3">
+                </div>
+
+                <div class="d-grid gap-2">
+
+                    <!-- IMPORT -->
+                    <button class="btn btn-primary">
+
                         Import Questions
-                    </h5>
 
-                    <!-- ============================= -->
-                    <!-- EXCEL IMPORT -->
-                    <!-- ============================= -->
-                    <div class="card bg-light border mb-4">
+                    </button>
 
-                        <div class="card-body">
+                    <!-- TEMPLATE -->
+                    <a href="{{ url_for('export_question_template') }}"
+                       class="btn btn-outline-success">
 
-                            <form method="POST"
-                                  enctype="multipart/form-data"
-                                  action="{{ url_for('import_questions', subject_id=subject.id) }}">
+                        Download Template
 
-                                <div class="mb-3">
+                    </a>
 
-                                    <label class="form-label">
-                                        Upload Excel / CSV
-                                    </label>
+                    <!-- EXPORT -->
+                    <a href="{{ url_for('export_questions',
+                                        subject_id=exam.subject.id) }}"
+                       class="btn btn-success">
 
-                                    <input type="file"
-                                           name="questions_file"
-                                           class="form-control"
-                                           required>
+                        Export Questions
 
-                                </div>
+                    </a>
 
-                                <!-- FORMAT GUIDE -->
-                                <div class="alert alert-info small">
+                </div>
 
-                                    <strong>Excel Format:</strong>
+            </form>
 
-                                    <hr>
+        </div>
 
-                                    question |
-                                    choice_a |
-                                    choice_b |
-                                    choice_c |
-                                    choice_d |
-                                    correct_answer |
-                                    points
+    </div>
 
-                                </div>
+    <!-- ================================= -->
+    <!-- IMPORT EXISTING -->
+    <!-- ================================= -->
 
-                                <div class="d-grid gap-2">
+    <div class="card shadow-sm">
 
-                                    <button type="submit"
-                                            class="btn btn-primary">
+        <div class="card-header bg-primary text-white">
 
-                                        Import All Questions
+            Import Existing Questions
 
-                                    </button>
+        </div>
 
-                                    <!-- EXPORT BUTTON -->
-                                    <a href="{{ url_for('export_questions', subject_id=subject.id) }}"
-                                       class="btn btn-success">
+        <div class="card-body">
 
-                                       Export Questions
+            <form method="POST"
+                  action="{{ url_for('import_existing_questions',
+                                     subject_id=exam.subject.id) }}">
 
-                                    </a>
+                <div class="mb-3">
 
-                                </div>
+                    <label class="form-label fw-bold">
 
-                            </form>
+                        Select Subject
 
-                        </div>
+                    </label>
 
-                    </div>
+                    <select class="form-select"
+                            name="subject_id">
 
-                    <!-- ============================= -->
-                    <!-- DATABASE IMPORT -->
-                    <!-- ============================= -->
-                    <div class="card border shadow-sm">
+                        <option value="">
+                            -- Choose Subject --
+                        </option>
 
-                        <div class="card-header bg-primary text-white">
-                            Import Existing Questions
-                        </div>
+                        {% for s in subjects %}
 
-                        <div class="card-body">
+                        <option value="{{ s.id }}">
 
-                            <form method="POST"
-                                  action="{{ url_for('import_existing_questions', subject_id=subject.id) }}">
+                            {{ s.subject_code }}
+                            -
+                            {{ s.subject_name }}
 
-                                <!-- SUBJECT DROPDOWN -->
-                                <div class="mb-3">
+                        </option>
 
-                                    <label class="form-label">
-                                        Select Subject
-                                    </label>
+                        {% endfor %}
 
-                                    <select id="subjectSelect"
-                                            class="form-select">
+                    </select>
 
-                                        <option value="">
-                                            -- Select Subject --
-                                        </option>
+                </div>
 
-                                        {% for s in subjects %}
+                <button class="btn btn-primary w-100">
 
-                                        <option value="{{ s.id }}">
-                                            {{ s.subject_code }} - {{ s.subject_name }}
-                                        </option>
+                    Import Selected Questions
 
-                                        {% endfor %}
+                </button>
 
-                                    </select>
+            </form>
 
-                                </div>
+        </div>
 
-                                <!-- QUESTIONS LIST -->
-                                <div class="mb-3">
+    </div>
 
-<!-- QUESTIONS DROPDOWN -->
-<div class="mb-3">
+</div>
 
-    <label class="form-label">
-        Select Questions
-    </label>
+<!-- ===================================== -->
+<!-- RIGHT SIDE BUILDER -->
+<!-- ===================================== -->
 
-    <div class="dropdown w-100">
+<div class="col-md-8">
 
-        <!-- TOGGLE BUTTON -->
-        <button class="btn btn-light border w-100 dropdown-toggle"
-                type="button"
-                data-bs-toggle="dropdown"
-                aria-expanded="false">
+<div class="d-flex justify-content-between align-items-center mb-3">
 
-            Select Questions
+    <h5 class="mb-0">
+
+        Drag & Drop Question Builder
+
+    </h5>
+
+    <button type="button"
+            class="btn btn-success btn-sm"
+            onclick="addCard()">
+
+        + Add Question
+
+    </button>
+
+</div>
+
+<form method="POST">
+
+<div id="builder">
+
+<!-- ===================================== -->
+<!-- DEFAULT QUESTION CARD -->
+<!-- ===================================== -->
+
+<div class="question-card card p-3 mb-3 shadow-sm">
+
+    <!-- TOP BAR -->
+    <div class="d-flex justify-content-between align-items-center mb-2">
+
+        <span class="drag-handle btn btn-outline-secondary btn-sm">
+
+            Drag
+
+        </span>
+
+        <button type="button"
+                class="btn btn-danger btn-sm del">
+
+            Delete
 
         </button>
 
-        <!-- DROPDOWN MENU -->
-        <div class="dropdown-menu w-100 p-2"
-             style="max-height:300px; overflow-y:auto;">
+    </div>
 
-            {% for q in all_questions %}
+    <!-- TYPE -->
+    <div class="mb-2">
 
-            <div class="form-check">
+        <label class="form-label fw-bold">
 
-                <input class="form-check-input question-checkbox"
-                       type="checkbox"
-                       name="question_ids"
-                       value="{{ q.id }}"
-                       id="q{{ q.id }}">
+            Question Type
 
-                <label class="form-check-label"
-                       for="q{{ q.id }}">
+        </label>
 
-                    {{ q.question_text }}
+        <select class="form-select type"
+                name="question_type[]">
 
-                </label>
+            <option value="mcq">
 
-            </div>
+                Multiple Choice
 
-            {% endfor %}
+            </option>
+
+            <option value="identification">
+
+                Identification
+
+            </option>
+
+        </select>
+
+    </div>
+
+    <!-- QUESTION -->
+    <div class="mb-2">
+
+        <label class="form-label fw-bold">
+
+            Question
+
+        </label>
+
+        <textarea class="form-control question-input"
+                  rows="3"
+                  name="question_text[]"
+                  placeholder="Type the full question here..."></textarea>
+
+    </div>
+
+    <!-- MCQ -->
+    <div class="mcq-section">
+
+        <label class="form-label fw-bold">
+
+            Choices
+
+        </label>
+
+        <input class="form-control mb-2"
+               name="choice_a[]"
+               placeholder="Choice A">
+
+        <input class="form-control mb-2"
+               name="choice_b[]"
+               placeholder="Choice B">
+
+        <input class="form-control mb-2"
+               name="choice_c[]"
+               placeholder="Choice C">
+
+        <input class="form-control mb-2"
+               name="choice_d[]"
+               placeholder="Choice D">
+
+        <input class="form-control mb-2"
+               name="correct_answer[]"
+               placeholder="Correct Answer">
+
+    </div>
+
+    <!-- IDENTIFICATION -->
+    <div class="identification-section d-none">
+
+        <label class="form-label fw-bold">
+
+            Identification Answer
+
+        </label>
+
+        <input class="form-control mb-2"
+               name="correct_identification[]"
+               placeholder="Type the correct answer">
+
+    </div>
+
+    <!-- POINTS -->
+    <div class="mb-2">
+
+        <label class="form-label fw-bold">
+
+            Points
+
+        </label>
+
+        <input type="number"
+               class="form-control"
+               name="points[]"
+               value="1"
+               placeholder="Points">
+
+    </div>
+
+    <!-- AI CHECK -->
+    <div class="form-check form-switch mb-3">
+
+        <input class="form-check-input"
+               type="checkbox"
+               name="ai_checking[]">
+
+        <label class="form-check-label">
+
+            Enable AI-assisted answer checking
+
+        </label>
+
+    </div>
+
+    <!-- PREVIEW -->
+    <div class="preview-box">
+
+        <strong>
+
+            Live Preview
+
+        </strong>
+
+        <hr>
+
+        <div class="preview-question">
+
+            Your question preview will appear here...
 
         </div>
 
@@ -331,236 +501,341 @@ if (localStorage.getItem("darkMode") === "true") {
 
 </div>
 
-<small id="selectedCount" class="text-muted">
-    0 questions selected
-</small>
-                                </div>
+</div>
 
-                                <div class="d-grid">
+<!-- SAVE -->
+<button class="btn btn-success w-100 mt-3">
 
-                                    <button type="submit"
-                                            class="btn btn-primary">
+    Save All Questions
 
-                                        Import Selected Questions
+</button>
 
-                                    </button>
-
-                                </div>
-
-                            </form>
-
-                        </div>
-
-                    </div>
-
-                </div>
-
-                <!-- ================================= -->
-                <!-- RIGHT SIDE : MANUAL ENTRY -->
-                <!-- ================================= -->
-                <div class="col-md-8">
-
-                    <h5 class="mb-3">
-                        Manual Question Entry
-                    </h5>
-
-                    <form method="POST">
-
-                        {{ form.hidden_tag() }}
-
-                        <!-- QUESTION -->
-                        <div class="mb-3">
-
-                            {{ form.question_text.label(class="form-label") }}
-
-                            {{ form.question_text(
-                                class="form-control",
-                                rows="3"
-                            ) }}
-
-                        </div>
-
-                        <!-- CHOICE A -->
-                        <div class="mb-3">
-
-                            {{ form.choice_a.label(class="form-label") }}
-
-                            {{ form.choice_a(class="form-control") }}
-
-                        </div>
-
-                        <!-- CHOICE B -->
-                        <div class="mb-3">
-
-                            {{ form.choice_b.label(class="form-label") }}
-
-                            {{ form.choice_b(class="form-control") }}
-
-                        </div>
-
-                        <!-- CHOICE C -->
-                        <div class="mb-3">
-
-                            {{ form.choice_c.label(class="form-label") }}
-
-                            {{ form.choice_c(class="form-control") }}
-
-                        </div>
-
-                        <!-- CHOICE D -->
-                        <div class="mb-3">
-
-                            {{ form.choice_d.label(class="form-label") }}
-
-                            {{ form.choice_d(class="form-control") }}
-
-                        </div>
-
-                        <!-- CORRECT ANSWER -->
-                        <div class="mb-3">
-
-                            {{ form.correct_answer.label(class="form-label") }}
-
-                            {{ form.correct_answer(
-                                class="form-select"
-                            ) }}
-
-                        </div>
-
-                        <!-- POINTS -->
-                        <div class="mb-3">
-
-                            {{ form.points.label(class="form-label") }}
-
-                            {{ form.points(
-                                class="form-control"
-                            ) }}
-
-                        </div>
-
-                        <!-- BUTTON -->
-                        <div class="d-grid">
-
-                            {{ form.submit(
-                                class="btn btn-success"
-                            ) }}
-
-                        </div>
-
-                    </form>
-
-                    <!-- EXISTING QUESTIONS -->
-                    <hr>
-
-                    <h5 class="mt-4">
-                        Existing Questions
-                    </h5>
-
-                    {% if questions %}
-
-                    <div style="max-height:500px; overflow-y:auto;">
-
-                        <ul class="list-group">
-
-                            {% for q in questions %}
-
-                            <li class="list-group-item">
-
-                                <strong>
-                                    {{ q.question_text }}
-                                </strong>
-
-                                <br><br>
-
-                                A. {{ q.choice_a }} <br>
-                                B. {{ q.choice_b }} <br>
-                                C. {{ q.choice_c }} <br>
-                                D. {{ q.choice_d }}
-
-                                <br><br>
-
-                                <span class="badge bg-success">
-                                    Correct Answer:
-                                    {{ q.correct_answer }}
-                                </span>
-
-                                <span class="badge bg-primary">
-                                    {{ q.points }} pts
-                                </span>
-
-                            </li>
-
-                            {% endfor %}
-
-                        </ul>
-
-                    </div>
-
-                    {% else %}
-
-                    <div class="alert alert-secondary">
-                        No questions added yet.
-                    </div>
-
-                    {% endif %}
-
-                </div>
-
-            </div>
-
-        </div>
-
-    </div>
+</form>
 
 </div>
 
-<!-- Bootstrap JS -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</div>
 
-<!-- SUBJECT FILTER SCRIPT -->
+<!-- ===================================== -->
+<!-- EXISTING QUESTIONS -->
+<!-- ===================================== -->
+
+<hr>
+
+<h5 class="mt-4">
+
+    Existing Questions
+
+</h5>
+
+{% if questions %}
+
+<div style="max-height:500px; overflow-y:auto;">
+
+<ul class="list-group">
+
+{% for q in questions %}
+
+<li class="list-group-item">
+
+    <strong>
+
+        {{ q.question_text }}
+
+    </strong>
+
+    <br><br>
+
+    {% if q.question_type == "mcq" %}
+
+        A. {{ q.choice_a }} <br>
+        B. {{ q.choice_b }} <br>
+        C. {{ q.choice_c }} <br>
+        D. {{ q.choice_d }}
+
+    {% else %}
+
+        <span class="badge bg-warning text-dark">
+
+            Identification Question
+
+        </span>
+
+    {% endif %}
+
+    <br><br>
+
+    <span class="badge bg-success">
+
+        Correct:
+        {{ q.correct_answer }}
+
+    </span>
+
+    <span class="badge bg-primary">
+
+        {{ q.points }} pts
+
+    </span>
+
+</li>
+
+{% endfor %}
+
+</ul>
+
+</div>
+
+{% else %}
+
+<div class="alert alert-secondary">
+
+    No questions added yet.
+
+</div>
+
+{% endif %}
+
+</div>
+</div>
+</div>
+
+<!-- ===================================== -->
+<!-- JAVASCRIPT -->
+<!-- ===================================== -->
+
 <script>
 
-const subjectSelect = document.getElementById('subjectSelect');
+// =====================================
+// DRAG & DROP
+// =====================================
 
-subjectSelect.addEventListener('change', function () {
+new Sortable(document.getElementById("builder"), {
+    animation: 150,
+    handle: '.drag-handle'
+});
 
-    const selectedSubject = this.value;
+// =====================================
+// ADD QUESTION CARD
+// =====================================
 
-    const questions = document.querySelectorAll('.question-item');
+function addCard() {
 
-    questions.forEach(question => {
+    let div = document.createElement("div");
 
-        if (question.dataset.subject === selectedSubject) {
+    div.className = "question-card card p-3 mb-3 shadow-sm";
 
-            question.style.display = 'block';
+    div.innerHTML = `
+
+        <div class="d-flex justify-content-between align-items-center mb-2">
+
+            <span class="drag-handle btn btn-outline-secondary btn-sm">
+
+                Drag
+
+            </span>
+
+            <button type="button"
+                    class="btn btn-danger btn-sm del">
+
+                Delete
+
+            </button>
+
+        </div>
+
+        <div class="mb-2">
+
+            <label class="form-label fw-bold">
+
+                Question Type
+
+            </label>
+
+            <select class="form-select type"
+                    name="question_type[]">
+
+                <option value="mcq">
+
+                    Multiple Choice
+
+                </option>
+
+                <option value="identification">
+
+                    Identification
+
+                </option>
+
+            </select>
+
+        </div>
+
+        <div class="mb-2">
+
+            <label class="form-label fw-bold">
+
+                Question
+
+            </label>
+
+            <textarea class="form-control question-input"
+                      rows="3"
+                      name="question_text[]"
+                      placeholder="Type the full question here..."></textarea>
+
+        </div>
+
+        <div class="mcq-section">
+
+            <label class="form-label fw-bold">
+
+                Choices
+
+            </label>
+
+            <input class="form-control mb-2"
+                   name="choice_a[]"
+                   placeholder="Choice A">
+
+            <input class="form-control mb-2"
+                   name="choice_b[]"
+                   placeholder="Choice B">
+
+            <input class="form-control mb-2"
+                   name="choice_c[]"
+                   placeholder="Choice C">
+
+            <input class="form-control mb-2"
+                   name="choice_d[]"
+                   placeholder="Choice D">
+
+            <input class="form-control mb-2"
+                   name="correct_answer[]"
+                   placeholder="Correct Answer">
+
+        </div>
+
+        <div class="identification-section d-none">
+
+            <label class="form-label fw-bold">
+
+                Identification Answer
+
+            </label>
+
+            <input class="form-control mb-2"
+                   name="correct_identification[]"
+                   placeholder="Type the correct answer">
+
+        </div>
+
+        <div class="mb-2">
+
+            <label class="form-label fw-bold">
+
+                Points
+
+            </label>
+
+            <input type="number"
+                   class="form-control"
+                   name="points[]"
+                   value="1">
+
+        </div>
+
+        <div class="form-check form-switch mb-3">
+
+            <input class="form-check-input"
+                   type="checkbox"
+                   name="ai_checking[]">
+
+            <label class="form-check-label">
+
+                Enable AI-assisted answer checking
+
+            </label>
+
+        </div>
+
+        <div class="preview-box">
+
+            <strong>
+
+                Live Preview
+
+            </strong>
+
+            <hr>
+
+            <div class="preview-question">
+
+                Your question preview will appear here...
+
+            </div>
+
+        </div>
+    `;
+
+    document.getElementById("builder").appendChild(div);
+}
+
+// =====================================
+// TOGGLE QUESTION TYPE
+// =====================================
+
+document.addEventListener("change", function(e){
+
+    if(e.target.classList.contains("type")){
+
+        let card = e.target.closest(".question-card");
+
+        let mcq = card.querySelector(".mcq-section");
+        let identification = card.querySelector(".identification-section");
+
+        if(e.target.value === "mcq"){
+
+            mcq.classList.remove("d-none");
+            identification.classList.add("d-none");
 
         } else {
 
-            question.style.display = 'none';
-
+            mcq.classList.add("d-none");
+            identification.classList.remove("d-none");
         }
+    }
+});
 
-    });
+// =====================================
+// DELETE CARD
+// =====================================
 
+document.addEventListener("click", function(e){
+
+    if(e.target.classList.contains("del")){
+
+        e.target.closest(".question-card").remove();
+    }
+});
+
+// =====================================
+// LIVE PREVIEW
+// =====================================
+
+document.addEventListener("input", function(e){
+
+    if(e.target.classList.contains("question-input")){
+
+        let card = e.target.closest(".question-card");
+
+        let preview = card.querySelector(".preview-question");
+
+        preview.innerText = e.target.value;
+    }
 });
 
 </script>
-<script>
 
-const checkboxes = document.querySelectorAll('.question-checkbox');
-const counter = document.getElementById('selectedCount');
-
-function updateCount() {
-
-    const checked = document.querySelectorAll('.question-checkbox:checked').length;
-
-    counter.textContent = checked + " questions selected";
-}
-
-checkboxes.forEach(cb => {
-    cb.addEventListener('change', updateCount);
-});
-
-</script>
 </body>
 </html>

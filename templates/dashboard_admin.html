@@ -524,22 +524,19 @@ setInterval(updateTimer,1000);
 
         <ul class="dropdown-menu dropdown-menu-end w-100">
 
-            {% for subject in subjects %}
+{% for exam in exams %}
 
-            <li>
+<li>
+    <a class="dropdown-item"
+       href="{{ url_for('add_question', exam_id=exam.id) }}">
 
-                <a class="dropdown-item"
-                   href="{{ url_for('add_question', subject_id=subject.id) }}">
+        {{ exam.subject.subject_code }} -
+        {{ exam.title }}
 
-                    {{ subject.subject_code }}
-                    -
-                    {{ subject.subject_name }}
+    </a>
+</li>
 
-                </a>
-
-            </li>
-
-            {% endfor %}
+{% endfor %}
 
         </ul>
 
