@@ -183,7 +183,7 @@ class Subject(db.Model):
     subject_code = db.Column(db.String(20))
     subject_name = db.Column(db.String(100))
 
-    exams = db.relationship('Exam', backref='subject', lazy=True)
+    exam = db.relationship('Exam', backref='subject', lazy=True)
 
 class Exam(db.Model):
     __tablename__ = 'exam'
@@ -295,6 +295,9 @@ class ExamAccess(db.Model):
 
     approved_by = db.Column(db.String(100))
     approved_at = db.Column(db.DateTime)
+
+    # ✅ ADD THIS (CRITICAL FIX)
+    exam = db.relationship('Exam', backref='access_records')
 
 class StudentAnswer(db.Model):
     __tablename__ = 'student_answers'
@@ -750,45 +753,29 @@ def dashboard_student():
 
     role = session.get('role')
 
-    # STUDENT
     if role == 'Student':
-        student_id = session.get('student_id')   # ✅ FIXED
+        student_id = session.get('student_id')
 
-    # ADMIN / INSTRUCTOR
+        if not student_id:
+            flash("Session expired. Please login again.", "danger")
+            return redirect(url_for('login'))
+
     else:
         student_id = request.args.get('student_id')
 
-        if not student_id:
-            students = []
-            return render_template(
-                "dashboard_student.html",
-                students=students,
-                student_name=None,
-                role=role
-            )
-
     students = Student.query.filter_by(student_id=student_id).all()
 
-    # SAFE NAME HANDLING
     student_name = students[0].name if students else "Student"
 
-    # SUBJECTS
-    subjects = Subject.query.all()
-
-    # EXAM ACCESS (FIXED LOGIC)
-    allowed_exams = ExamAccess.query.filter_by(
-        student_id=student_id,   # ✅ use same variable, NOT session again
-        status="approved",
-        has_finished=False
-    ).all()
+    # ✅ ONLY ACTIVE EXAMS SHOWN
+    allowed_exams = Exam.query.filter_by(is_active=True).all()
 
     return render_template(
         "dashboard_student.html",
         students=students,
         student_name=student_name,
         role=role,
-        subjects=subjects,
-        allowed_exams=allowed_exams   # (IMPORTANT: pass to HTML)
+        allowed_exams=allowed_exams
     )
 
 # View Student (Admin)
@@ -1089,7 +1076,8 @@ def add_question(exam_id):
                     points=points
                 )
 
-                id_index += 1  # 👈 important
+                identification_answers = iter(identification_answers)
+                next(identification_answers, "")
 
             # =========================
             # MCQ
@@ -1184,38 +1172,45 @@ def delete_question(question_id):
     return jsonify({"success": True})
 
 
-@app.route('/import-questions/<int:subject_id>', methods=['POST'])
+@app.route('/import-questions/<int:exam_id>', methods=['POST'])
 @login_required(role='Admin')
-def import_questions(subject_id):
+def import_questions(exam_id):
 
-    subject = Subject.query.get_or_404(subject_id)
+    exam = Exam.query.get_or_404(exam_id)
+
     file = request.files.get('questions_file')
 
     if not file:
         flash("No file uploaded", "danger")
-        return redirect(url_for('view_exams'))
+        return redirect(url_for('add_question', exam_id=exam.id))
 
     filename = secure_filename(file.filename)
 
     try:
+
         df = pd.read_csv(file) if filename.endswith('.csv') else pd.read_excel(file)
 
         required_columns = [
-            'question', 'choice_a', 'choice_b',
-            'choice_c', 'choice_d', 'correct_answer', 'points'
+            'question',
+            'choice_a',
+            'choice_b',
+            'choice_c',
+            'choice_d',
+            'correct_answer',
+            'points'
         ]
 
         for col in required_columns:
             if col not in df.columns:
                 flash(f"Missing column: {col}", "danger")
-                return redirect(url_for('view_exams'))
+                return redirect(url_for('add_question', exam_id=exam.id))
 
         count = 0
 
         for _, row in df.iterrows():
 
             existing = Question.query.filter_by(
-                subject_id=subject.id,
+                exam_id=exam.id,
                 question_text=row['question']
             ).first()
 
@@ -1223,7 +1218,7 @@ def import_questions(subject_id):
                 continue
 
             question = Question(
-                subject_id=subject.id,
+                exam_id=exam.id,
                 question_text=row['question'],
                 choice_a=row['choice_a'],
                 choice_b=row['choice_b'],
@@ -1237,21 +1232,26 @@ def import_questions(subject_id):
             count += 1
 
         db.session.commit()
+
         flash(f"{count} questions imported successfully!", "success")
 
     except Exception as e:
+
         db.session.rollback()
         flash(f"Error importing questions: {str(e)}", "danger")
 
-    return redirect(url_for('view_exams'))
+    return redirect(url_for('add_question', exam_id=exam.id))
 
 
-@app.route('/export-questions/<int:subject_id>')
+@app.route('/export-questions/<int:exam_id>')
 @login_required(role='Admin')
-def export_questions(subject_id):
+def export_questions(exam_id):
 
-    subject = Subject.query.get_or_404(subject_id)
-    questions = Question.query.filter_by(subject_id=subject.id).all()
+    exam = Exam.query.get_or_404(exam_id)
+
+    questions = Question.query.filter_by(
+        exam_id=exam.id
+    ).all()
 
     data = [{
         'question': q.question_text,
@@ -1266,6 +1266,7 @@ def export_questions(subject_id):
     df = pd.DataFrame(data)
 
     output = io.BytesIO()
+
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
         df.to_excel(writer, index=False)
 
@@ -1274,7 +1275,7 @@ def export_questions(subject_id):
     return send_file(
         output,
         as_attachment=True,
-        download_name=f"{subject.subject_code}_questions.xlsx",
+        download_name=f"{exam.title}_questions.xlsx",
         mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
     )
 
@@ -1308,9 +1309,9 @@ def export_question_template():
         download_name="question_template.xlsx"
     )
 
-@app.route('/import-existing-questions/<int:subject_id>', methods=['POST'])
+@app.route('/import-existing-questions/<int:exam_id>', methods=['POST'])
 @login_required(role=['Instructor', 'Admin'])
-def import_existing_questions(subject_id):
+def import_existing_questions(exam_id):
 
     selected_ids = request.form.getlist('question_ids')
 
@@ -1321,7 +1322,7 @@ def import_existing_questions(subject_id):
         if original:
 
             db.session.add(Question(
-                subject_id=subject_id,
+                exam_id=exam_id,
                 question_text=original.question_text,
                 choice_a=original.choice_a,
                 choice_b=original.choice_b,
@@ -1335,19 +1336,19 @@ def import_existing_questions(subject_id):
 
     flash('Questions imported successfully!', 'success')
 
-    return redirect(url_for('add_question', exam_id=subject_id))
+    return redirect(url_for('add_question', exam_id=exam_id))
 
 
 # =========================================================
 # 4. 📚 STUDENT EXAM LIST
 # =========================================================
 
-@app.route('/student/exams')
+@app.route('/student/exam')
 @login_required(role='Student')
 def student_exams():
 
-    exams = Exam.query.filter_by(is_active=True).all()
-    return render_template('student_exams.html', exams=exams)
+    exam = Exam.query.filter_by(is_active=True).all()
+    return render_template('student_exams.html', exam=exam)
 
 
 # =========================================================
@@ -1358,83 +1359,211 @@ def student_exams():
 @login_required(role='Student')
 def start_exam(exam_id):
 
+    student_id = session.get('student_id')
+
+    if not student_id:
+        flash("Session expired. Please login again.", "danger")
+        return redirect(url_for('login'))
+
+    # 1. Check access
     access = ExamAccess.query.filter_by(
-        student_id=session['student_id'],
+        student_id=student_id,
         exam_id=exam_id,
-        is_allowed=True
+        status='approved'
     ).first()
 
     if not access:
-        flash("You are not allowed to take this exam.")
+        flash("You are not allowed to take this exam.", "danger")
         return redirect(url_for('dashboard_student'))
+
+    # 2. Check exam
+    exam = Exam.query.get_or_404(exam_id)
+
+    if not exam.is_active:
+        flash("Exam is not active yet.", "warning")
+        return redirect(url_for('dashboard_student'))
+
+    # 3. Load first question (SINGLE SOURCE OF TRUTH)
+    first_question = Question.query.filter_by(
+        exam_id=exam.id
+    ).order_by(Question.id.asc()).first()
+
+    if not first_question:
+        flash("This exam has no questions yet.", "danger")
+        return redirect(url_for('dashboard_student'))
+
+    # 4. Find existing attempt (IMPORTANT FIX)
+    attempt = ExamAttempt.query.filter_by(
+        student_id=student_id,
+        exam_id=exam_id
+    ).first()
+
+    # 5. If already submitted → block
+    if attempt and attempt.is_submitted:
+        flash("You already completed this exam.", "warning")
+        return redirect(url_for('dashboard_student'))
+
+    # 6. Create attempt only if missing
+    if not attempt:
+        attempt = ExamAttempt(
+            student_id=student_id,
+            exam_id=exam_id,
+            is_submitted=False
+        )
+        db.session.add(attempt)
+        db.session.commit()
+
+    # 7. Store session state
+    session['attempt_id'] = attempt.id
+
+    return redirect(url_for(
+        'take_exam',
+        exam_id=exam.id,
+        question_id=first_question.id
+    ))
+
+@app.route('/request-exam/<int:exam_id>')
+@login_required(role='Student')
+def request_exam_access(exam_id):
+
+    student_id = session.get('student_id')
+
+    access = ExamAccess.query.filter_by(
+        student_id=student_id,
+        exam_id=exam_id
+    ).first()
+
+    if not access:
+        access = ExamAccess(
+            student_id=student_id,
+            exam_id=exam_id,
+            status="pending"
+        )
+        db.session.add(access)
+
+    db.session.commit()
+
+    flash("Request sent. Waiting for approval.", "info")
+    return redirect(url_for('dashboard_student'))
+
+@app.route('/exam/<int:exam_id>/request', methods=['POST'])
+@login_required(role='Student')
+def request_take_exam(exam_id):
+
+    student_id = session.get('student_id')
 
     exam = Exam.query.get_or_404(exam_id)
 
     if not exam.is_active:
-        flash("Exam is not yet started.")
+        flash("Exam not available yet.", "warning")
         return redirect(url_for('dashboard_student'))
 
-    if exam.end_time and datetime.utcnow() > exam.end_time:
-        flash("Exam already ended.")
-        return redirect(url_for('dashboard_student'))
-
+    # check if attempt exists
     attempt = ExamAttempt.query.filter_by(
-        student_id=session['student_id'],
-        exam_id=exam_id,
-        is_submitted=False
+        student_id=student_id,
+        exam_id=exam_id
     ).first()
 
     if not attempt:
-        attempt = ExamAttempt(student_id=session['student_id'], exam_id=exam_id)
+        attempt = ExamAttempt(
+            student_id=student_id,
+            exam_id=exam_id,
+            is_submitted=False
+        )
         db.session.add(attempt)
         db.session.commit()
 
-    questions = Question.query.filter_by(exam_id=exam_id).all()
-    random.shuffle(questions)
+    attempt.status = "pending"
+    db.session.commit()
 
-    session['question_order'] = [q.id for q in questions]
-    session['attempt_id'] = attempt.id
-    session['exam_end_time'] = datetime.utcnow().timestamp() + (exam.duration_minutes * 60)
-
-    return redirect(url_for('take_exam', exam_id=exam.id, question_id=questions[0].id))
+    flash("Request sent. Waiting for approval.", "info")
+    return redirect(url_for('dashboard_student'))
 
 
-@app.route('/exam/<int:exam_id>/question/<int:question_id>')
+@app.route('/exam/<int:exam_id>/take/<int:question_id>')
 @login_required(role='Student')
 def take_exam(exam_id, question_id):
 
-    attempt = ExamAttempt.query.get(session.get('attempt_id'))
+    student_id = session.get('student_id')
+    attempt_id = session.get('attempt_id')
+
+    if not student_id or not attempt_id:
+        flash("Session expired. Please restart the exam.", "danger")
+        return redirect(url_for('dashboard_student'))
+
+    attempt = ExamAttempt.query.filter_by(
+        id=attempt_id,
+        student_id=student_id,
+        exam_id=exam_id,
+        is_submitted=False,
+        status="approved"
+    ).first()
 
     if not attempt:
-        return redirect(url_for('student_exams'))
+        flash("Invalid or completed exam attempt.", "danger")
+        return redirect(url_for('dashboard_student'))
 
-    question = Question.query.get_or_404(question_id)
+    exam = Exam.query.get_or_404(exam_id)
 
-    attempt.last_question_id = question_id
-    db.session.commit()
+    questions = Question.query.filter_by(
+        exam_id=exam_id
+    ).order_by(Question.id.asc()).all()
 
-    time_left = int(session.get('exam_end_time', 0) - datetime.utcnow().timestamp())
+    if not questions:
+        flash("No questions found.", "danger")
+        return redirect(url_for('dashboard_student'))
 
-    if time_left <= 0:
-        return redirect(url_for('submit_exam', exam_id=exam_id))
+    # 1. Find index ONCE
+    current_index = next(
+        (i for i, q in enumerate(questions) if q.id == question_id),
+        0
+    )
 
-    return render_template('take_exam.html', question=question, time_left=time_left)
+    # 2. Current question
+    current_question = questions[current_index]
 
+    # 3. Navigation
+    prev_question = questions[current_index - 1] if current_index > 0 else None
+    next_question = questions[current_index + 1] if current_index + 1 < len(questions) else None
+
+    # 4. REAL progress (DB-based)
+    answers_count = StudentAnswer.query.filter_by(
+        attempt_id=attempt_id
+    ).count()
+
+    total_questions = len(questions)
+
+    answer_progress = int((answers_count / total_questions) * 100) if total_questions else 0
+
+    return render_template(
+        "take_exam.html",
+        exam=exam,
+        question=current_question,
+        current_index=current_index + 1,
+        total=total_questions,
+        progress=answer_progress,
+        next_question=next_question,
+        prev_question=prev_question
+    )
 
 @app.route('/save-answer', methods=['POST'])
 @login_required(role='Student')
 def save_answer():
 
     data = request.get_json()
+    attempt_id = session.get('attempt_id')
+
+    if not attempt_id:
+        return jsonify({"error": "No active attempt"}), 400
 
     answer = StudentAnswer.query.filter_by(
-        attempt_id=session.get('attempt_id'),
+        attempt_id=attempt_id,
         question_id=data['question_id']
     ).first()
 
     if not answer:
         answer = StudentAnswer(
-            attempt_id=session['attempt_id'],
+            attempt_id=attempt_id,
             question_id=data['question_id'],
             selected_answer=data['answer']
         )
@@ -1444,7 +1573,7 @@ def save_answer():
 
     db.session.commit()
 
-    return {"status": "saved"}
+    return jsonify({"status": "saved"})
 
 
 @app.route('/log-tab-switch', methods=['POST'])
@@ -1464,51 +1593,162 @@ def log_tab_switch():
 @login_required(role='Student')
 def submit_exam(exam_id):
 
+    student_id = session.get('student_id')
+
+    if not student_id:
+        flash("Session expired.", "danger")
+        return redirect(url_for('login'))
+
+    # 1. Get attempt safely
     attempt = ExamAttempt.query.filter_by(
-        student_id=session['student_id'],
+        student_id=student_id,
         exam_id=exam_id,
         is_submitted=False
     ).first()
 
     if not attempt:
-        flash("No active attempt.", "danger")
-        return redirect(url_for('student_exams'))
+        flash("No active attempt or already submitted.", "danger")
+        return redirect(url_for('dashboard_student'))
 
+    # 2. Prevent double submission immediately
+    if attempt.is_submitted:
+        flash("Exam already submitted.", "warning")
+        return redirect(url_for('dashboard_student'))
+
+    # 3. Load all answers in one go
     answers = StudentAnswer.query.filter_by(attempt_id=attempt.id).all()
+
+    # 4. Load all questions once (avoid N+1 queries)
+    questions = {
+        q.id: q for q in Question.query.filter_by(exam_id=exam_id).all()
+    }
 
     score = 0
 
+    # 5. Grade safely
     for ans in answers:
-        question = Question.query.get(ans.question_id)
+
+        question = questions.get(ans.question_id)
+
+        if not question:
+            continue
+
+        student_answer = (ans.selected_answer or "").strip().lower()
+        correct = (question.correct_answer or "").strip().lower()
 
         if question.question_type == "identification":
-
-            if ans.selected_answer and ans.selected_answer.strip().lower() == question.correct_answer.strip().lower():
-                ans.is_correct = True
-                score += question.points
-            else:
-                ans.is_correct = False
-
+            is_correct = student_answer == correct
         else:
+            is_correct = student_answer == correct
 
-            if question.correct_answer == ans.selected_answer:
-                ans.is_correct = True
-                score += question.points
-            else:
-                ans.is_correct = False
+        ans.is_correct = is_correct
 
+        if is_correct:
+            score += question.points
+
+    # 6. Finalize attempt
     attempt.score = score
     attempt.is_submitted = True
     attempt.submitted_at = datetime.utcnow()
 
     db.session.commit()
 
+    # 7. Clean session safely
     session.pop('attempt_id', None)
     session.pop('question_order', None)
     session.pop('exam_end_time', None)
 
-    flash(f"Exam submitted! Score: {score}", "success")
-    return redirect(url_for('student_exams'))
+    flash(f"Exam submitted successfully! Score: {score}", "success")
+
+    return redirect(url_for('dashboard_student'))
+
+@app.route('/exam/<int:exam_id>/answer', methods=['POST'])
+@login_required(role='Student')
+def submit_answer(exam_id):
+
+    student_id = session.get('student_id')
+    attempt_id = session.get('attempt_id')
+
+    if not student_id or not attempt_id:
+        flash("Session expired. Please restart exam.", "danger")
+        return redirect(url_for('dashboard_student'))
+
+    # 1. Get attempt (must be active)
+    attempt = ExamAttempt.query.filter_by(
+        id=attempt_id,
+        student_id=student_id,
+        exam_id=exam_id,
+        is_submitted=False
+    ).first()
+
+    if not attempt:
+        flash("Invalid exam attempt.", "danger")
+        return redirect(url_for('dashboard_student'))
+
+    # 2. Get form data
+    question_id = request.form.get('question_id')
+    selected_answer = request.form.get('answer')
+
+    if not question_id:
+        flash("Invalid question.", "danger")
+        return redirect(url_for('dashboard_student'))
+
+    question = Question.query.filter_by(
+        id=question_id,
+        exam_id=exam_id
+    ).first()
+
+    if not question:
+        flash("Question not found.", "danger")
+        return redirect(url_for('start_exam', exam_id=exam_id))
+
+    # 3. Normalize answer
+    selected_answer = (selected_answer or "").strip()
+
+    # For identification questions, use text input instead
+    if question.question_type == "identification":
+        selected_answer = request.form.get('answer_text', "").strip()
+
+    # 4. Check existing answer (IMPORTANT FIX)
+    existing = StudentAnswer.query.filter_by(
+        attempt_id=attempt.id,
+        question_id=question.id
+    ).first()
+
+    if existing:
+        existing.selected_answer = selected_answer
+    else:
+        new_answer = StudentAnswer(
+            attempt_id=attempt.id,
+            question_id=question.id,
+            selected_answer=selected_answer
+        )
+        db.session.add(new_answer)
+
+    db.session.commit()
+
+    # 5. Load next question
+    questions = Question.query.filter_by(
+        exam_id=exam_id
+    ).order_by(Question.id.asc()).all()
+
+    question_ids = [q.id for q in questions]
+
+    try:
+        index = question_ids.index(int(question_id))
+    except:
+        flash("Navigation error.", "danger")
+        return redirect(url_for('dashboard_student'))
+
+    # 6. NEXT QUESTION LOGIC
+    if index + 1 < len(question_ids):
+        next_id = question_ids[index + 1]
+        return redirect(url_for('take_exam', exam_id=exam_id, question_id=next_id))
+
+    # 7. LAST QUESTION → GO TO SUBMIT PAGE
+    flash("You reached the last question. Submit your exam.", "info")
+    return redirect(url_for('review_exam', exam_id=exam_id))
+
 
 # =========================================================
 # 6. 👨‍🏫 ADMIN EXAM CONTROL
@@ -1524,18 +1764,47 @@ def approve_exam_student(exam_id, student_id):
         flash("Student not found.", "danger")
         return redirect(url_for('view_exams'))
 
-    access = ExamAccess.query.filter_by(student_id=student.id, exam_id=exam_id).first()
+    access = ExamAccess.query.filter_by(
+        student_id=student_id,
+        exam_id=exam_id
+    ).first()
 
     if access:
-        access.is_allowed = True
+        access.status = "approved"
     else:
-        db.session.add(ExamAccess(student_id=student.id, exam_id=exam_id, is_allowed=True))
+        db.session.add(ExamAccess(student_id=student_id, exam_id=exam_id, status='approved'))
 
     db.session.commit()
 
     flash("Student approved for exam.", "success")
     return redirect(url_for('view_exams'))
 
+@app.route('/approve-request/<int:access_id>')
+@login_required(role=['Admin', 'Instructor'])
+def approve_request(access_id):
+
+    access = ExamAccess.query.get_or_404(access_id)
+
+    access.status = "approved"
+    access.approved_by = session.get('username')
+    access.approved_at = datetime.utcnow()
+
+    db.session.commit()
+
+    flash("Request approved!", "success")
+    return redirect(url_for('view_exams'))
+
+@app.route('/approve-attempt/<int:attempt_id>')
+@login_required(role=['Admin', 'Instructor'])
+def approve_attempt(attempt_id):
+
+    attempt = ExamAttempt.query.get_or_404(attempt_id)
+
+    attempt.status = "approved"
+    db.session.commit()
+
+    flash("Student approved for exam.", "success")
+    return redirect(url_for('view_exams'))
 
 @app.route('/start-exam/<int:exam_id>', methods=['POST'])
 @login_required(role=['Instructor', 'Admin'])
@@ -1543,6 +1812,7 @@ def admin_start_exam(exam_id):
 
     exam = Exam.query.get_or_404(exam_id)
     exam.is_active = True
+
     db.session.commit()
 
     flash("Exam started successfully!", "success")
@@ -1554,6 +1824,7 @@ def end_exam(exam_id):
 
     exam = Exam.query.get_or_404(exam_id)
     exam.is_active = False
+
     db.session.commit()
 
     flash("Exam ended successfully!", "warning")

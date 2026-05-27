@@ -129,6 +129,7 @@ if (localStorage.getItem("darkMode") === "true") {
                     </button>
                 </form>
 
+
             </div>
 
             <!-- DELETE BUTTON (SEPARATED RIGHT SIDE) -->
@@ -200,6 +201,23 @@ if (localStorage.getItem("darkMode") === "true") {
                         {% endif %}
 
                     {% endfor %}
+
+<h5>Student Requests</h5>
+
+{% for attempt in exam.attempts %}
+    {% if attempt.status == "pending" %}
+
+        <div>
+            {{ attempt.student.name }}
+
+            <a href="{{ url_for('approve_attempt', attempt_id=attempt.id) }}"
+               class="btn btn-success btn-sm">
+               Approve
+            </a>
+        </div>
+
+    {% endif %}
+{% endfor %}
 
                     </tbody>
 

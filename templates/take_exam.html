@@ -34,31 +34,81 @@
                 {{ question.question_text }}
             </h5>
 
-            <form method="POST">
+<form method="POST" action="{{ url_for('submit_answer', exam_id=exam.id) }}">
 
-                <input type="hidden" name="question_id" value="{{ question.id }}">
+    <input type="hidden" name="question_id" value="{{ question.id }}">
+    <input type="hidden" name="answer" id="selectedAnswer">
 
-                <button name="answer" value="A" class="btn btn-outline-primary option-btn">
-                    A. {{ question.choice_a }}
-                </button>
+    <button type="button" onclick="selectAnswer('A')" class="btn btn-outline-primary option-btn">
+        A. {{ question.choice_a }}
+    </button>
 
-                <button name="answer" value="B" class="btn btn-outline-primary option-btn">
-                    B. {{ question.choice_b }}
-                </button>
+    <button type="button" onclick="selectAnswer('B')" class="btn btn-outline-primary option-btn">
+        B. {{ question.choice_b }}
+    </button>
 
-                <button name="answer" value="C" class="btn btn-outline-primary option-btn">
-                    C. {{ question.choice_c }}
-                </button>
+    <button type="button" onclick="selectAnswer('C')" class="btn btn-outline-primary option-btn">
+        C. {{ question.choice_c }}
+    </button>
 
-                <button name="answer" value="D" class="btn btn-outline-primary option-btn">
-                    D. {{ question.choice_d }}
-                </button>
+    <button type="button" onclick="selectAnswer('D')" class="btn btn-outline-primary option-btn">
+        D. {{ question.choice_d }}
+    </button>
 
-            </form>
+    <button type="submit" class="btn btn-success w-100 mt-3">
+        Submit Answer
+    </button>
+
+</form>
 
         </div>
 
     </div>
+
+</div>
+
+<div class="d-flex justify-content-between mt-4">
+
+    {% if prev_question %}
+    <a href="{{ url_for('take_exam', exam_id=exam.id, question_id=prev_question.id) }}"
+       class="btn btn-secondary">
+        ⬅ Previous
+    </a>
+    {% else %}
+    <div></div>
+    {% endif %}
+
+    {% if next_question %}
+    <a href="{{ url_for('take_exam', exam_id=exam.id, question_id=next_question.id) }}"
+       class="btn btn-primary">
+        Next ➡
+    </a>
+    {% else %}
+    <button class="btn btn-success" onclick="submitExam()">
+        Finish Exam
+    </button>
+    {% endif %}
+
+</div>
+
+<div class="fixed-bottom bg-light p-2 border-top">
+
+  <div class="container">
+
+    <div class="d-flex justify-content-between mb-1">
+      <small>Progress</small>
+      <small>{{ current_index }} / {{ total }}</small>
+    </div>
+
+    <div class="progress">
+      <div class="progress-bar"
+           role="progressbar"
+           style="width: {{ progress }}%">
+        {{ progress }}%
+      </div>
+    </div>
+
+  </div>
 
 </div>
 
@@ -81,6 +131,19 @@ function updateTimer() {
 }
 
 setInterval(updateTimer, 1000);
+</script>
+<script>
+function selectAnswer(value) {
+    document.getElementById("selectedAnswer").value = value;
+}
+</script>
+
+<script>
+function submitExam() {
+    if(confirm("Are you sure you want to submit your exam?")) {
+        window.location.href = "{{ url_for('submit_exam', exam_id=exam.id) }}";
+    }
+}
 </script>
 
 </body>

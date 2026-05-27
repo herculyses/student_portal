@@ -259,27 +259,28 @@ if (localStorage.getItem("darkMode") === "true") {
 
       <div>
 
-        <h6 class="mb-1">
-          {{ access.exam.title }}
-        </h6>
+<h6 class="mb-1">
+  {{ access.title }}
+</h6>
 
-        <small class="text-muted">
+<small class="text-muted">
+  Subject:
+  {{ access.subject.subject_code if access.subject else "N/A" }}
+</small>
 
-          Subject:
-          {{ access.exam.subject.subject_code }}
+{% if access.is_active %}
 
-        </small>
+<a href="{{ url_for('start_exam', exam_id=access.id) }}" class="btn btn-primary">
+    Take Exam
+</a>
 
-      </div>
+      {% else %}
 
-      <a href="{{ url_for('start_exam',
-          exam_id=access.exam.id) }}"
-         class="btn btn-success">
+      <button class="btn btn-secondary" disabled>
+          Not Available Yet
+      </button>
 
-         <i class="bi bi-play-fill"></i>
-         Start Exam
-
-      </a>
+      {% endif %}
 
     </div>
 
@@ -296,7 +297,6 @@ if (localStorage.getItem("darkMode") === "true") {
   {% endif %}
 
 </div>
-
 </div>
 </div>
 

@@ -168,7 +168,7 @@ if (localStorage.getItem("darkMode") === "true") {
             <form method="POST"
                   enctype="multipart/form-data"
                   action="{{ url_for('import_questions',
-                                     subject_id=exam.subject.id) }}">
+                                     exam_id=exam.id) }}">
 
                 <div class="mb-3">
 
@@ -228,7 +228,7 @@ if (localStorage.getItem("darkMode") === "true") {
 
                     <!-- EXPORT -->
                     <a href="{{ url_for('export_questions',
-                                        subject_id=exam.subject.id) }}"
+                                        exam_id=exam.id) }}"
                        class="btn btn-success">
 
                         Export Questions
@@ -259,7 +259,7 @@ if (localStorage.getItem("darkMode") === "true") {
 
             <form method="POST"
                   action="{{ url_for('import_existing_questions',
-                                     subject_id=exam.subject.id) }}">
+                                     exam_id=exam.id) }}">
 
                 <div class="mb-3">
 
