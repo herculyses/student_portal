@@ -249,57 +249,60 @@ if (localStorage.getItem("darkMode") === "true") {
     Available Exams
   </h4>
 
-  {% if allowed_exams %}
+{% if allowed_exams %}
 
-  <div class="list-group">
+<div class="list-group">
 
-    {% for access in allowed_exams %}
+  {% for access in allowed_exams %}
 
-    <div class="list-group-item exam-card d-flex justify-content-between align-items-center">
+  <div id="req-{{ access.student_id }}-{{ access.exam_id }}"
+     class="list-group-item exam-card d-flex justify-content-between align-items-center">
 
-      <div>
+    <div>
+      <h6 class="mb-1">{{ access.title }}</h6>
 
-<h6 class="mb-1">
-  {{ access.title }}
-</h6>
+      <small class="text-muted">
+        Subject: {{ access.subject.subject_code if access.subject else "N/A" }}
+      </small>
+    </div>
 
-<small class="text-muted">
-  Subject:
-  {{ access.subject.subject_code if access.subject else "N/A" }}
-</small>
+    <div>
 
-{% if access.is_active %}
+      {% if access.status == "approved" %}
 
-<a href="{{ url_for('start_exam', exam_id=access.id) }}" class="btn btn-primary">
-    Take Exam
-</a>
+          <a href="{{ url_for('start_exam', exam_id=access.exam_id) }}"
+             class="btn btn-success">
+              Start Exam
+          </a>
+
+      {% elif access.status == "pending" %}
+
+          <button class="btn btn-warning" disabled>
+              Pending Approval
+          </button>
 
       {% else %}
 
-      <button class="btn btn-secondary" disabled>
-          Not Available Yet
-      </button>
+          <button class="btn btn-primary"
+                  onclick="requestExam({{ access.exam_id }})">
+              Request Exam
+          </button>
 
       {% endif %}
 
     </div>
 
-    {% endfor %}
-
   </div>
 
-  {% else %}
-
-  <p class="text-muted">
-    No available exams.
-  </p>
-
-  {% endif %}
+  {% endfor %}
 
 </div>
-</div>
-</div>
 
+{% else %}
+
+<p>No exams available.</p>
+
+{% endif %}
 </div>
 
 <!-- ================= SCRIPTS ================= -->
@@ -334,6 +337,55 @@ document.querySelectorAll(".flash").forEach(flash => {
 
 });
 
+</script>
+
+<script>
+function requestExam(examId) {
+
+    fetch(`/exam/${examId}/request`, {
+        method: "POST"
+    }).then(res => res.json())
+      .then(data => {
+          alert("Your request is being processed. Pending approval.");
+          location.reload();
+      });
+}
+
+function approvedPopup() {
+    alert("Your exam request has been approved. You can now start the exam.");
+}
+</script>
+
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
+<script>
+const socket = io();
+
+/* request sent */
+socket.on("request_sent", function(data) {
+    alert("Request sent! Waiting for approval...");
+    location.reload();
+});
+
+/* approved */
+socket.on("approved", function(data) {
+    alert("Your exam request has been approved!");
+    location.reload();
+});
+
+/* optional real-time update */
+socket.on("status_update", function(data) {
+    const row = document.getElementById(`req-${data.student_id}-${data.exam_id}`);
+
+    if (row) {
+        const statusCell = row.querySelector(".status");
+
+        if (statusCell) {
+            statusCell.innerHTML =
+                `<span class="badge bg-success">Approved</span>`;
+        }
+    }
+});
 </script>
 
 </body>

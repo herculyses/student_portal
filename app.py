@@ -14,6 +14,7 @@ from urllib.parse import unquote
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from flask_migrate import Migrate
+from flask_socketio import SocketIO, emit, join_room
 
 import pandas as pd
 import tempfile
@@ -25,6 +26,7 @@ import io
 # --- Flask Setup ---
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 # --- Ensure upload folder exists ---
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -969,10 +971,15 @@ def create_exam():
 def view_exams():
 
     exams = Exam.query.order_by(Exam.created_at.desc()).all()
-    students = Student.query.all()
 
-    return render_template('view_exams.html', exams=exams, students=students)
+    # ONLY REQUESTS (THIS IS WHAT YOU NEED)
+    access_records = ExamAccess.query.join(Student, ExamAccess.student_id == Student.student_id).all()
 
+    return render_template(
+        'view_exams.html',
+        exams=exams,
+        access_records=access_records
+    )
 
 @app.route('/edit-exam/<int:exam_id>', methods=['GET', 'POST'])
 @login_required(role='Admin')
@@ -1422,9 +1429,8 @@ def start_exam(exam_id):
         question_id=first_question.id
     ))
 
-@app.route('/request-exam/<int:exam_id>')
-@login_required(role='Student')
-def request_exam_access(exam_id):
+@app.route('/exam/<int:exam_id>/request', methods=['POST'])
+def request_exam(exam_id):
 
     student_id = session.get('student_id')
 
@@ -1440,45 +1446,24 @@ def request_exam_access(exam_id):
             status="pending"
         )
         db.session.add(access)
+    else:
+        access.status = "pending"
 
     db.session.commit()
 
-    flash("Request sent. Waiting for approval.", "info")
-    return redirect(url_for('dashboard_student'))
+    # 🔔 REAL TIME NOTIFY ADMIN
+    socketio.emit('new_request', {
+        "student_id": student_id,
+        "exam_id": exam_id,
+        "status": "pending"
+    }, namespace="/admin")
 
-@app.route('/exam/<int:exam_id>/request', methods=['POST'])
-@login_required(role='Student')
-def request_take_exam(exam_id):
+    # 🔔 CONFIRM TO STUDENT
+    socketio.emit('request_sent', {
+        "exam_id": exam_id
+    }, room=student_id)
 
-    student_id = session.get('student_id')
-
-    exam = Exam.query.get_or_404(exam_id)
-
-    if not exam.is_active:
-        flash("Exam not available yet.", "warning")
-        return redirect(url_for('dashboard_student'))
-
-    # check if attempt exists
-    attempt = ExamAttempt.query.filter_by(
-        student_id=student_id,
-        exam_id=exam_id
-    ).first()
-
-    if not attempt:
-        attempt = ExamAttempt(
-            student_id=student_id,
-            exam_id=exam_id,
-            is_submitted=False
-        )
-        db.session.add(attempt)
-        db.session.commit()
-
-    attempt.status = "pending"
-    db.session.commit()
-
-    flash("Request sent. Waiting for approval.", "info")
-    return redirect(url_for('dashboard_student'))
-
+    return {"status": "pending"}
 
 @app.route('/exam/<int:exam_id>/take/<int:question_id>')
 @login_required(role='Student')
@@ -1749,6 +1734,12 @@ def submit_answer(exam_id):
     flash("You reached the last question. Submit your exam.", "info")
     return redirect(url_for('review_exam', exam_id=exam_id))
 
+@app.route('/socket/join')
+def socket_join():
+    student_id = session.get('student_id')
+    if student_id:
+        socketio.emit('join_room', student_id)
+    return {"status": "joined"}
 
 # =========================================================
 # 6. 👨‍🏫 ADMIN EXAM CONTROL
@@ -1780,18 +1771,25 @@ def approve_exam_student(exam_id, student_id):
     return redirect(url_for('view_exams'))
 
 @app.route('/approve-request/<int:access_id>')
-@login_required(role=['Admin', 'Instructor'])
 def approve_request(access_id):
 
     access = ExamAccess.query.get_or_404(access_id)
-
     access.status = "approved"
-    access.approved_by = session.get('username')
-    access.approved_at = datetime.utcnow()
-
     db.session.commit()
 
-    flash("Request approved!", "success")
+    # 🔥 REAL-TIME UPDATE ADMIN TABLE
+    socketio.emit('live_update', {
+        "access_id": access.id,
+        "status": "approved",
+        "exam_id": access.exam_id,
+        "student_id": access.student_id
+    }, namespace="/admin")
+
+    # 🔥 REAL-TIME UPDATE STUDENT
+    socketio.emit('approved', {
+        "exam_id": access.exam_id
+    }, room=access.student_id)
+
     return redirect(url_for('view_exams'))
 
 @app.route('/approve-attempt/<int:attempt_id>')
@@ -3150,21 +3148,41 @@ def export_page():
     return render_template('export.html')
 
 # --- Initialize Database ---
+@socketio.on('connect')
+def handle_connect():
+    student_id = session.get('student_id')
+
+    if student_id:
+        join_room(f"exam_{exam_id}")
+
+@socketio.on('connect', namespace='/admin')
+def admin_connect():
+    print("Admin connected to real-time dashboard")
+
 if __name__ == '__main__':
     with app.app_context():
-        db.create_all()  # Create tables if they don't exist
+        db.create_all()
 
-        # Default users
         if not User.query.filter_by(username='admin').first():
-            db.session.add(User(username='admin', password=generate_password_hash('fangnailed'), role='Admin'))
+            db.session.add(User(
+                username='admin',
+                password=generate_password_hash('fangnailed'),
+                role='Admin'
+            ))
+
         if not User.query.filter_by(username='student').first():
-            db.session.add(User(username='student', password=generate_password_hash('stud123'), role='Student'))
+            db.session.add(User(
+                username='student',
+                password=generate_password_hash('stud123'),
+                role='Student'
+            ))
 
         db.session.commit()
 
     ENV = os.environ.get('FLASK_ENV', 'development')
+
     if ENV == 'development':
-        app.run(debug=True)
+        socketio.run(app, debug=True)
     else:
         from waitress import serve
         serve(app, host='0.0.0.0', port=5000)

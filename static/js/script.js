@@ -129,27 +129,3 @@ document.addEventListener("DOMContentLoaded", function() {
             }
         });
     };
-
-    // =========================
-    // DELETE AJAX
-    // =========================
-
-    window.deleteQuestion = function(id) {
-
-        if (!confirm("Delete this question?")) return;
-
-        fetch(`/delete-question/${id}`, {
-            method: "POST"
-        })
-        .then(res => res.json())
-        .then(data => {
-
-            if (data.success) {
-                const el = document.getElementById("q-" + id);
-                if (el) el.remove();
-            }
-
-        });
-    };
-
-});
