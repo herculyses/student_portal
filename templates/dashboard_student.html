@@ -147,11 +147,9 @@ if (localStorage.getItem("darkMode") === "true") {
     {{ student_name or "Student" }}'s Dashboard
   </h2>
 
-  {% if students and students|length > 0 %}
     <p class="text-muted">
-      Student ID: {{ students[0].student_id }}
+      Student ID: {{ student.student_id if student else '' }}
     </p>
-  {% endif %}
 
 </div>
 
@@ -167,7 +165,7 @@ if (localStorage.getItem("darkMode") === "true") {
 {% endwith %}
 
 <!-- ================= GRADES ================= -->
-{% if students %}
+{% if grades %}
 
 <div class="card shadow-sm p-3">
 
@@ -193,25 +191,25 @@ if (localStorage.getItem("darkMode") === "true") {
 
       <tbody>
 
-        {% for s in students %}
+        {% for g in grades %}
 
         <tr>
 
-          <td>{{ s.subject }}</td>
+          <td>{{ g.subject }}</td>
 
-          <td>{{ s.midterm_grade or '-' }}</td>
+          <td>{{ g.midterm_grade or '-' }}</td>
 
-          <td>{{ s.midterm_remarks or '-' }}</td>
+          <td>{{ g.midterm_remarks or '-' }}</td>
 
-          <td>{{ s.final_grade or '-' }}</td>
+          <td>{{ g.final_grade or '-' }}</td>
 
-          <td>{{ s.final_remarks or '-' }}</td>
+          <td>{{ g.final_remarks or '-' }}</td>
 
           <td class="text-center">
 
             <a href="{{ url_for('subject_performance',
-              student_id=s.student_id,
-              subject=s.subject | urlencode) }}"
+              student_id=g.student_id,
+              subject=g.subject | urlencode) }}"
               class="btn btn-primary btn-sm">
 
               <i class="bi bi-eye-fill"></i>
@@ -283,7 +281,7 @@ if (localStorage.getItem("darkMode") === "true") {
 
       {% else %}
 
-          <button class="btn btn-primary"
+          <button class="btn btn-primary request-btn"
                   onclick="requestExam({{ access.exam_id }})">
               Request Exam
           </button>
@@ -309,83 +307,68 @@ if (localStorage.getItem("darkMode") === "true") {
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
-
 /* ================= DARK MODE ================= */
 function toggleDarkMode() {
-
     document.body.classList.toggle("dark-mode");
-
-    if (document.body.classList.contains("dark-mode")) {
-        localStorage.setItem("darkMode", "true");
-    } else {
-        localStorage.setItem("darkMode", "false");
-    }
-
+    localStorage.setItem(
+        "darkMode",
+        document.body.classList.contains("dark-mode")
+    );
 }
 
 /* ================= FLASH AUTO REMOVE ================= */
 document.querySelectorAll(".flash").forEach(flash => {
-
     setTimeout(() => {
-
         flash.style.transition = "0.5s";
         flash.style.opacity = "0";
-
         setTimeout(() => flash.remove(), 500);
-
     }, 4000);
-
 });
 
-</script>
-
-<script>
-function requestExam(examId) {
-
-    fetch(`/exam/${examId}/request`, {
-        method: "POST"
-    }).then(res => res.json())
-      .then(data => {
-          alert("Your request is being processed. Pending approval.");
-          location.reload();
-      });
+/* ✅ PUT IT HERE (RIGHT BEFORE SSE OR ANYWHERE ABOVE ITS USE) */
+function createStartButton(examId) {
+    const a = document.createElement("a");
+    a.className = "btn btn-success";
+    a.href = `/start_exam/${examId}`;
+    a.textContent = "Start Exam";
+    return a;
 }
 
-function approvedPopup() {
-    alert("Your exam request has been approved. You can now start the exam.");
+/* ================= SSE (REAL-TIME STREAM) ================= */
+const studentId = "{{ student.student_id if student else '' }}";
+
+if (!studentId) {
+    console.warn("No student ID for SSE - stream disabled");
+} else {
+
+    const studentStream = new EventSource(`/stream/${studentId}`);
+
+    studentStream.addEventListener("request_sent", function (e) {
+        const data = JSON.parse(e.data);
+
+        alert("Request sent! Waiting for approval...");
+        console.log("Request sent:", data);
+    });
+
+    studentStream.addEventListener("approved", function (e) {
+        const data = JSON.parse(e.data);
+
+        alert("Your exam request has been approved! You can now start the exam.");
+        console.log("Approved:", data);
+
+        const row = document.querySelector(
+            `#req-${data.student_id}-${data.exam_id}`
+        );
+
+        row
+          ?.querySelector(".request-btn")
+          ?.replaceWith(createStartButton(data.exam_id));
+    });
+
+    studentStream.onerror = function () {
+        console.log("SSE disconnected or error");
+    };
 }
-</script>
-
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-
-<script>
-const socket = io();
-
-/* request sent */
-socket.on("request_sent", function(data) {
-    alert("Request sent! Waiting for approval...");
-    location.reload();
-});
-
-/* approved */
-socket.on("approved", function(data) {
-    alert("Your exam request has been approved!");
-    location.reload();
-});
-
-/* optional real-time update */
-socket.on("status_update", function(data) {
-    const row = document.getElementById(`req-${data.student_id}-${data.exam_id}`);
-
-    if (row) {
-        const statusCell = row.querySelector(".status");
-
-        if (statusCell) {
-            statusCell.innerHTML =
-                `<span class="badge bg-success">Approved</span>`;
-        }
-    }
-});
 </script>
 
 </body>

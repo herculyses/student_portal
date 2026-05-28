@@ -113,9 +113,29 @@ if (localStorage.getItem("darkMode") === "true") {
                 <button class="btn btn-outline-danger btn-sm"
                         data-bs-toggle="modal"
                         data-bs-target="#deleteModal"
-                        onclick="setDeleteExam({{ exam.id }}, '{{ exam.title }}')">
+                        onclick="setDeleteExam({{ exam.id }}, {{ exam.title | tojson }})">
                     <i class="bi bi-trash"></i> Delete Exam
                 </button>
+            </div>
+            <!-- ============================= -->
+            <!-- LIVE REQUESTS (SOCKET.IO) -->
+            <!-- ============================= -->
+
+            <h5 class="mt-4">Live Requests</h5>
+
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Student ID</th>
+                            <th>Exam ID</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+
+                    <tbody id="requestQueue"></tbody>
+                </table>
             </div>
 
             <!-- ============================= -->
@@ -187,27 +207,6 @@ if (localStorage.getItem("darkMode") === "true") {
                 </table>
             </div>
 
-            <!-- ============================= -->
-            <!-- LIVE REQUESTS (SOCKET.IO) -->
-            <!-- ============================= -->
-
-            <h5 class="mt-4">Live Requests</h5>
-
-            <div class="table-responsive">
-                <table class="table table-sm table-bordered">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Student ID</th>
-                            <th>Exam ID</th>
-                            <th>Status</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-
-                    <tbody id="requestQueue"></tbody>
-                </table>
-            </div>
-
         </div>
     </div>
 
@@ -247,7 +246,7 @@ if (localStorage.getItem("darkMode") === "true") {
 
 <!-- SCRIPTS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+
 
 <script>
 function setDeleteExam(id, title) {
@@ -257,15 +256,21 @@ function setDeleteExam(id, title) {
 </script>
 
 <script>
-const adminSocket = io("/admin");
+const adminStream = new EventSource("/stream/admin");
 
-adminSocket.on("new_request", function(data) {
+adminStream.addEventListener("new_request", function (e) {
+    const data = JSON.parse(e.data);
+    console.log("New exam request:", data);
     addToQueue(data);
 });
 
 function addToQueue(data) {
+    const id = `req-${data.student_id}-${data.exam_id}`;
+
+    if (document.getElementById(id)) return;
+
     const row = `
-        <tr id="req-${data.student_id}-${data.exam_id}">
+        <tr id="${id}">
             <td>${data.student_id}</td>
             <td>${data.exam_id}</td>
             <td><span class="badge bg-warning">Pending</span></td>
@@ -278,11 +283,18 @@ function addToQueue(data) {
         </tr>
     `;
 
-    document.getElementById("requestQueue").insertAdjacentHTML("beforeend", row);
+    document.getElementById("requestQueue")
+        .insertAdjacentHTML("beforeend", row);
 }
 
 function approveRequest(examId, studentId) {
-    window.location.href = `/approve/${examId}/${studentId}`;
+    fetch(`/approve/${examId}/${studentId}`, {
+        method: "POST"
+    })
+    .then(res => res.json())
+    .then(data => {
+        console.log("Approved:", data);
+    });
 }
 </script>
 

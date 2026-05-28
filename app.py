@@ -8,17 +8,18 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 from datetime import datetime
 from flask import get_flashed_messages
-from flask import Response
+from flask import Response, stream_with_context
 from flask_wtf.csrf import CSRFProtect
 from urllib.parse import unquote
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from flask_migrate import Migrate
-# from flask_socketio import SocketIO, emit, join_room
+from collections import defaultdict
 
 import pandas as pd
 import tempfile
 import time
+import json
 import os
 import csv
 import io
@@ -26,7 +27,6 @@ import io
 # --- Flask Setup ---
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
-# socketio = SocketIO(app, cors_allowed_origins="*")
 
 # --- Ensure upload folder exists ---
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -58,6 +58,11 @@ db = SQLAlchemy(app)
 
 # --- Flask-Migrate ---
 migrate = Migrate(app, db)
+
+# =========================
+# SSE EVENT STORE (REALTIME QUEUE)
+# =========================
+sse_events = defaultdict(list)
 
 # --- Models ---
 class User(db.Model):
@@ -645,6 +650,27 @@ def login():
 
     return render_template('login.html', form=form)
 
+# =========================
+# SSE ROUTE
+# =========================
+@app.route('/stream/<user_id>')
+def stream(user_id):
+
+    def event_stream():
+
+        while True:
+
+            if user_id in sse_events and sse_events[user_id]:
+
+                event = sse_events[user_id].pop(0)
+
+                yield f"event: {event['event']}\n"
+                yield f"data: {json.dumps(event['data'])}\n\n"
+
+            time.sleep(1)
+
+    return Response(stream_with_context(event_stream()), mimetype="text/event-stream")
+
 # Logout
 @app.route('/logout')
 def logout():
@@ -765,19 +791,32 @@ def dashboard_student():
     else:
         student_id = request.args.get('student_id')
 
-    students = Student.query.filter_by(student_id=student_id).all()
+    student = Student.query.filter_by(student_id=student_id).first()
 
-    student_name = students[0].name if students else "Student"
+    if not student:
+        flash("Student not found.", "danger")
+        return redirect(url_for('login'))
 
-    # ✅ ONLY ACTIVE EXAMS SHOWN
-    allowed_exams = Exam.query.filter_by(is_active=True).all()
+    student_name = student.name
+
+    grades = Student.query.filter_by(student_id=student.student_id).all()
+
+    access_records = ExamAccess.query.filter_by(student_id=student.student_id).all()
+
+    # ✅ IMPORTANT: replace this with real access control
+    allowed_exams = (
+        Exam.query
+        .filter_by(is_active=True)
+        .all()
+    )
 
     return render_template(
         "dashboard_student.html",
-        students=students,
+        student=student,
         student_name=student_name,
         role=role,
-        allowed_exams=allowed_exams
+        allowed_exams=allowed_exams,
+        grades=grades
     )
 
 # View Student (Admin)
@@ -971,14 +1010,20 @@ def create_exam():
 def view_exams():
 
     exams = Exam.query.order_by(Exam.created_at.desc()).all()
+    students = Student.query.all()
+    # ✅ ADD THIS HERE
+    access_records = ExamAccess.query.all()
 
-    # ONLY REQUESTS (THIS IS WHAT YOU NEED)
-    access_records = ExamAccess.query.join(Student, ExamAccess.student_id == Student.student_id).all()
+    access_map = {
+        (a.student_id, a.exam_id): a
+        for a in access_records
+    }
 
     return render_template(
         'view_exams.html',
         exams=exams,
-        access_records=access_records
+        students=students,
+        access_map=access_map
     )
 
 @app.route('/edit-exam/<int:exam_id>', methods=['GET', 'POST'])
@@ -1451,17 +1496,15 @@ def request_exam(exam_id):
 
     db.session.commit()
 
-    # 🔔 REAL TIME NOTIFY ADMIN
-    socketio.emit('new_request', {
-        "student_id": student_id,
-        "exam_id": exam_id,
-        "status": "pending"
-    }, namespace="/admin")
-
-    # 🔔 CONFIRM TO STUDENT
-    socketio.emit('request_sent', {
-        "exam_id": exam_id
-    }, room=student_id)
+    # 🔔 PUSH EVENT TO ADMIN SSE QUEUE
+    sse_events["admin"].append({
+        "event": "new_request",
+        "data": {
+            "student_id": student_id,
+            "exam_id": exam_id,
+            "status": "pending"
+        }
+    })
 
     return {"status": "pending"}
 
@@ -1734,13 +1777,6 @@ def submit_answer(exam_id):
     flash("You reached the last question. Submit your exam.", "info")
     return redirect(url_for('review_exam', exam_id=exam_id))
 
-@app.route('/socket/join')
-def socket_join():
-    student_id = session.get('student_id')
-    if student_id:
-        socketio.emit('join_room', student_id)
-    return {"status": "joined"}
-
 # =========================================================
 # 6. 👨‍🏫 ADMIN EXAM CONTROL
 # =========================================================
@@ -1777,18 +1813,25 @@ def approve_request(access_id):
     access.status = "approved"
     db.session.commit()
 
-    # 🔥 REAL-TIME UPDATE ADMIN TABLE
-    socketio.emit('live_update', {
-        "access_id": access.id,
-        "status": "approved",
-        "exam_id": access.exam_id,
-        "student_id": access.student_id
-    }, namespace="/admin")
+    # 🔥 SEND UPDATE TO ADMIN STREAM
+    sse_events["admin"].append({
+        "event": "live_update",
+        "data": {
+            "access_id": access.id,
+            "status": "approved",
+            "exam_id": access.exam_id,
+            "student_id": access.student_id
+        }
+    })
 
-    # 🔥 REAL-TIME UPDATE STUDENT
-    socketio.emit('approved', {
-        "exam_id": access.exam_id
-    }, room=access.student_id)
+    # 🔥 SEND UPDATE TO SPECIFIC STUDENT STREAM
+    sse_events[str(access.student_id)].append({
+        "event": "approved",
+        "data": {
+            "exam_id": access.exam_id,
+            "status": "approved"
+        }
+    })
 
     return redirect(url_for('view_exams'))
 
@@ -3148,17 +3191,6 @@ def export_page():
     return render_template('export.html')
 
 # --- Initialize Database ---
-@socketio.on('connect')
-def handle_connect():
-    student_id = session.get('student_id')
-
-    if student_id:
-        join_room(f"exam_{exam_id}")
-
-@socketio.on('connect', namespace='/admin')
-def admin_connect():
-    print("Admin connected to real-time dashboard")
-
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
@@ -3182,7 +3214,7 @@ if __name__ == '__main__':
     ENV = os.environ.get('FLASK_ENV', 'development')
 
     if ENV == 'development':
-     #   socketio.run(app, debug=True)
+        app.run(debug=True)
     else:
         from waitress import serve
         serve(app, host='0.0.0.0', port=5000)
