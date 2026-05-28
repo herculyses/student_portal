@@ -14,7 +14,7 @@ from urllib.parse import unquote
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from flask_migrate import Migrate
-from flask_socketio import SocketIO, emit, join_room
+# from flask_socketio import SocketIO, emit, join_room
 
 import pandas as pd
 import tempfile
@@ -26,7 +26,7 @@ import io
 # --- Flask Setup ---
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your_secret_key'
-socketio = SocketIO(app, cors_allowed_origins="*")
+# socketio = SocketIO(app, cors_allowed_origins="*")
 
 # --- Ensure upload folder exists ---
 basedir = os.path.abspath(os.path.dirname(__file__))
@@ -3182,7 +3182,7 @@ if __name__ == '__main__':
     ENV = os.environ.get('FLASK_ENV', 'development')
 
     if ENV == 'development':
-        socketio.run(app, debug=True)
+     #   socketio.run(app, debug=True)
     else:
         from waitress import serve
         serve(app, host='0.0.0.0', port=5000)
