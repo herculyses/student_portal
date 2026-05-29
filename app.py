@@ -1485,7 +1485,7 @@ def start_exam(exam_id):
     ))
 
 @app.route("/request_exam/<int:exam_id>", methods=["POST"])
-@login_required
+@login_required()
 def request_exam(exam_id):
 
     student = Student.query.filter_by(
