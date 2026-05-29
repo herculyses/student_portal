@@ -75,6 +75,10 @@ if (localStorage.getItem("darkMode") === "true") {
                     <small class="text-muted">
                         {{ exam.term or "No Term" }} |
                         {{ exam.exam_type or "No Type" }} |
+                        {{ exam.year or "No Year" }} |
+                        {{ exam.section or "No Section" }} |
+                        {{ exam.semester or "No Semester" }} |
+                        {{ exam.school_year or "No School Year" }} |
                         {{ exam.duration_minutes }} mins
                     </small>
                 </div>
@@ -161,7 +165,7 @@ if (localStorage.getItem("darkMode") === "true") {
                     </thead>
 
                     <tbody>
-                        {% for student in students %}
+                        {% for student in exam_students[exam.id] %}
 
                             {% set access = access_map.get((student.student_id, exam.id)) %}
 

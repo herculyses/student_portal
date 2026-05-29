@@ -252,6 +252,118 @@ if (localStorage.getItem("darkMode") === "true") {
 
     </div>
 
+<!-- SECTION -->
+<div class="mb-3">
+
+    <label class="form-label">
+        Section
+    </label>
+
+    <input type="text"
+           name="section"
+           class="form-control"
+           value="{{ exam.section }}">
+
+</div>
+
+<!-- YEAR -->
+<div class="mb-3">
+
+    <label class="form-label">
+        Year Level
+    </label>
+
+    <select name="year"
+            class="form-control">
+
+        <option value="1st"
+            {% if exam.year == '1st' %}
+                selected
+            {% endif %}
+        >
+            1st Year
+        </option>
+
+        <option value="2nd"
+            {% if exam.year == '2nd' %}
+                selected
+            {% endif %}
+        >
+            2nd Year
+        </option>
+
+        <option value="3rd"
+            {% if exam.year == '3rd' %}
+                selected
+            {% endif %}
+        >
+            3rd Year
+        </option>
+
+        <option value="4th"
+            {% if exam.year == '4th' %}
+                selected
+            {% endif %}
+        >
+            4th Year
+        </option>
+
+    </select>
+
+</div>
+
+<!-- SCHOOL YEAR -->
+<div class="mb-3">
+
+    <label class="form-label">
+        School Year
+    </label>
+
+    <input type="text"
+           name="school_year"
+           class="form-control"
+           value="{{ exam.school_year }}">
+
+</div>
+
+<!-- SEMESTER -->
+<div class="mb-3">
+
+    <label class="form-label">
+        Semester
+    </label>
+
+    <select name="semester"
+            class="form-control">
+
+        <option value="1st"
+            {% if exam.semester == '1st' %}
+                selected
+            {% endif %}
+        >
+            1st
+        </option>
+
+        <option value="2nd"
+            {% if exam.semester == '2nd' %}
+                selected
+            {% endif %}
+        >
+            2nd
+        </option>
+
+        <option value="midyear"
+            {% if exam.semester == 'midyear' %}
+                selected
+            {% endif %}
+        >
+            midyear
+        </option>
+
+    </select>
+
+</div>
+
     <!-- DESCRIPTION -->
     <div class="mb-3">
 

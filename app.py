@@ -71,10 +71,17 @@ class User(db.Model):
     password = db.Column(db.String(200), nullable=False)
     role = db.Column(db.String(20), nullable=False)  # Admin/Instructor/Student
 
+    student_records = db.relationship(
+        'Student',
+        backref='user',
+        lazy=True
+    )
+
 class Student(db.Model):
     __tablename__ = 'student'
 
     student_id = db.Column(db.String(100), primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     name = db.Column(db.String(150), nullable=False)
 
     year = db.Column(db.String(20))
@@ -650,27 +657,6 @@ def login():
 
     return render_template('login.html', form=form)
 
-# =========================
-# SSE ROUTE
-# =========================
-@app.route('/stream/<user_id>')
-def stream(user_id):
-
-    def event_stream():
-
-        while True:
-
-            if user_id in sse_events and sse_events[user_id]:
-
-                event = sse_events[user_id].pop(0)
-
-                yield f"event: {event['event']}\n"
-                yield f"data: {json.dumps(event['data'])}\n\n"
-
-            time.sleep(1)
-
-    return Response(stream_with_context(event_stream()), mimetype="text/event-stream")
-
 # Logout
 @app.route('/logout')
 def logout():
@@ -678,7 +664,6 @@ def logout():
     session.clear()
     if user:
         add_log(user, 'Logged out')
-        time.sleep(1)  # 🕒 Prevent SQLite lock or empty data
     return redirect(url_for('login'))
 
 # Change Password
@@ -725,7 +710,10 @@ def change_password():
 
     return render_template('change_password.html')
 
+# =========================
 # --- Dashboards ---
+# =========================
+
 # ---- Admin Dashboard ----
 @app.route('/dashboard/admin')
 @login_required(role='Admin')
@@ -995,7 +983,6 @@ def add_subject():
 # =========================================================
 # 2. 🧠 EXAM MANAGEMENT (CREATE / VIEW / EDIT)
 # =========================================================
-
 @app.route('/create-exam', methods=['POST'])
 @login_required(role=['Instructor', 'Admin'])
 def create_exam():
@@ -1003,6 +990,15 @@ def create_exam():
     exam = Exam(
         subject_id=request.form.get('subject_id'),
         title=request.form.get('title'),
+
+        # ✅ NEW
+        term=request.form.get('term'),
+        exam_type=request.form.get('exam_type'),
+        section=request.form.get('section'),
+        year=request.form.get('year'),
+        school_year=request.form.get('school_year'),
+        semester=request.form.get('semester'),
+
         description=request.form.get('description'),
         duration_minutes=request.form.get('duration_minutes')
     )
@@ -1019,9 +1015,10 @@ def create_exam():
 @login_required(role=['Admin', 'Instructor'])
 def view_exams():
 
-    exams = Exam.query.order_by(Exam.created_at.desc()).all()
-    students = Student.query.all()
-    # ✅ ADD THIS HERE
+    exams = Exam.query.order_by(
+        Exam.created_at.desc()
+    ).all()
+
     access_records = ExamAccess.query.all()
 
     access_map = {
@@ -1029,10 +1026,44 @@ def view_exams():
         for a in access_records
     }
 
+    # ✅ exam_id -> filtered students
+    exam_students = {}
+
+    for exam in exams:
+
+        print("EXAM DEBUG:")
+        print(exam.subject.subject_code)
+        print(exam.semester)
+        print(exam.school_year)
+        print(exam.section)
+        print(exam.year)
+        print("--------------")
+
+        query = Student.query
+
+        if exam.subject:
+            query = query.filter_by(subject=exam.subject.subject_code)
+
+        if exam.semester:
+            query = query.filter_by(semester=exam.semester)
+
+        if exam.school_year:
+            query = query.filter_by(school_year=exam.school_year)
+
+        if exam.section:
+            query = query.filter_by(section=exam.section)
+
+        if exam.year:
+            query = query.filter_by(year=exam.year)
+
+        filtered_students = query.all()
+
+        exam_students[exam.id] = filtered_students
+
     return render_template(
         'view_exams.html',
         exams=exams,
-        students=students,
+        exam_students=exam_students,
         access_map=access_map
     )
 
@@ -1070,7 +1101,7 @@ def edit_exam(exam_id):
             for _, row in df.iterrows():
 
                 question = Question(
-                    subject_id=exam.subject_id,
+                    exam_id=exam.id,
                     question_text=row['question'],
                     choice_a=row['choice_a'],
                     choice_b=row['choice_b'],
@@ -1485,8 +1516,10 @@ def start_exam(exam_id):
     ))
 
 @app.route("/request_exam/<int:exam_id>", methods=["POST"])
-@login_required()
+@login_required(role='Student')
 def request_exam(exam_id):
+
+    print("REQUEST EXAM HIT")
 
     student = Student.query.filter_by(
         user_id=session["user_id"]
@@ -1532,7 +1565,6 @@ def take_exam(exam_id, question_id):
         student_id=student_id,
         exam_id=exam_id,
         is_submitted=False,
-        status="approved"
     ).first()
 
     if not attempt:
@@ -1909,6 +1941,27 @@ def delete_exam(exam_id):
 
     flash("Exam deleted successfully!", "success")
     return redirect(url_for('view_exams'))
+
+# =========================
+# SSE ROUTE
+# =========================
+@app.route('/stream/<user_id>')
+def stream(user_id):
+
+    def event_stream():
+
+        while True:
+
+            if user_id in sse_events and sse_events[user_id]:
+
+                event = sse_events[user_id].pop(0)
+
+                yield f"event: {event['event']}\n"
+                yield f"data: {json.dumps(event['data'])}\n\n"
+
+            time.sleep(1)
+
+    return Response(stream_with_context(event_stream()), mimetype="text/event-stream")
 
 # =========================================================
 # 7. 📊 STATUS API

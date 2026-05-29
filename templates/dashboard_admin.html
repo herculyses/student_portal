@@ -361,7 +361,9 @@ if (localStorage.getItem("darkMode") === "true") {
   <div class="modal-dialog">
     <div class="modal-content">
 
-      <form method="POST" action="{{ url_for('create_exam') }}">
+      <form method="POST"
+          action="{{ url_for('create_exam') }}"
+          enctype="multipart/form-data">
 
         <div class="modal-header">
           <h5 class="modal-title">Create Exam</h5>
@@ -385,6 +387,89 @@ if (localStorage.getItem("darkMode") === "true") {
             <label>Exam Title</label>
             <input type="text" name="title" class="form-control" required>
           </div>
+
+<!-- EXAM TYPE -->
+<div class="mb-3">
+    <label>Exam Type</label>
+
+    <select name="exam_type"
+            class="form-control"
+            required>
+
+        <option value="Quiz">Quiz</option>
+        <option value="Major Exam">Major Exam</option>
+        <option value="Activity">Activity</option>
+
+    </select>
+</div>
+
+<!-- TERM -->
+<div class="mb-3">
+    <label>Academic Term</label>
+
+    <select name="term"
+            class="form-control"
+            required>
+
+        <option value="Prelim">Prelim</option>
+        <option value="Midterm">Midterm</option>
+        <option value="Semi-Final">Semi-Final</option>
+        <option value="Final">Final</option>
+
+    </select>
+</div>
+
+<!-- SECTION -->
+<div class="mb-3">
+    <label>Section</label>
+
+    <input type="text"
+           name="section"
+           class="form-control"
+           placeholder="BSIT-1A"
+           required>
+</div>
+
+<!-- YEAR -->
+<div class="mb-3">
+    <label>Year Level</label>
+
+    <select name="year"
+            class="form-control"
+            required>
+
+        <option value="1">1st Year</option>
+        <option value="2">2nd Year</option>
+        <option value="3">3rd Year</option>
+        <option value="4">4th Year</option>
+
+    </select>
+</div>
+
+<!-- SCHOOL YEAR -->
+<div class="mb-3">
+    <label>School Year</label>
+
+    <input type="text"
+           name="school_year"
+           class="form-control"
+           placeholder="2025-2026"
+           required>
+</div>
+
+<!-- SEMESTER -->
+<div class="mb-3">
+    <label>Semester</label>
+
+    <select name="semester"
+            class="form-control"
+            required>
+
+        <option value="1st Semester">1st Semester</option>
+        <option value="2nd Semester">2nd Semester</option>
+
+    </select>
+</div>
 
           <div class="mb-3">
             <label>Description</label>
