@@ -801,14 +801,24 @@ def dashboard_student():
 
     grades = Student.query.filter_by(student_id=student.student_id).all()
 
-    access_records = ExamAccess.query.filter_by(student_id=student.student_id).all()
+    # ALL ACTIVE EXAMS
+    exams = Exam.query.filter_by(is_active=True).all()
 
-    # ✅ IMPORTANT: replace this with real access control
-    allowed_exams = (
-        Exam.query
-        .filter_by(is_active=True)
-        .all()
-    )
+    allowed_exams = []
+
+    for exam in exams:
+
+        access = ExamAccess.query.filter_by(
+            student_id=student.student_id,
+            exam_id=exam.id
+        ).first()
+
+        allowed_exams.append({
+            "id": exam.id,
+            "title": exam.title,
+            "subject": exam.subject,
+            "status": access.status if access else None
+        })
 
     return render_template(
         "dashboard_student.html",
@@ -1474,39 +1484,37 @@ def start_exam(exam_id):
         question_id=first_question.id
     ))
 
-@app.route('/exam/<int:exam_id>/request', methods=['POST'])
+@app.route("/request_exam/<int:exam_id>", methods=["POST"])
+@login_required
 def request_exam(exam_id):
 
-    student_id = session.get('student_id')
+    student = Student.query.filter_by(
+        user_id=session["user_id"]
+    ).first()
 
-    access = ExamAccess.query.filter_by(
-        student_id=student_id,
+    if not student:
+        return jsonify({"error": "Student not found"}), 404
+
+    existing = ExamAccess.query.filter_by(
+        student_id=student.student_id,
         exam_id=exam_id
     ).first()
 
-    if not access:
-        access = ExamAccess(
-            student_id=student_id,
-            exam_id=exam_id,
-            status="pending"
-        )
-        db.session.add(access)
-    else:
-        access.status = "pending"
+    if existing:
+        return jsonify({"error": "Already requested"}), 400
 
+    request_access = ExamAccess(
+        student_id=student.student_id,
+        exam_id=exam_id,
+        status="pending"
+    )
+
+    db.session.add(request_access)
     db.session.commit()
 
-    # 🔔 PUSH EVENT TO ADMIN SSE QUEUE
-    sse_events["admin"].append({
-        "event": "new_request",
-        "data": {
-            "student_id": student_id,
-            "exam_id": exam_id,
-            "status": "pending"
-        }
+    return jsonify({
+        "message": "Exam request submitted successfully"
     })
-
-    return {"status": "pending"}
 
 @app.route('/exam/<int:exam_id>/take/<int:question_id>')
 @login_required(role='Student')

@@ -3,7 +3,11 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <title>Student Dashboard</title>
+
+<link rel="icon" type="image/png"
+      href="{{ url_for('static', filename='favicon.png') }}">
 
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
@@ -251,48 +255,53 @@ if (localStorage.getItem("darkMode") === "true") {
 
 <div class="list-group">
 
-  {% for access in allowed_exams %}
+{% for exam in allowed_exams %}
 
-  <div id="req-{{ access.student_id }}-{{ access.exam_id }}"
+<div id="req-{{ student.student_id }}-{{ exam.id }}"
      class="list-group-item exam-card d-flex justify-content-between align-items-center">
 
     <div>
-      <h6 class="mb-1">{{ access.title }}</h6>
+        <h6 class="mb-1">{{ exam.title }}</h6>
 
-      <small class="text-muted">
-        Subject: {{ access.subject.subject_code if access.subject else "N/A" }}
-      </small>
+        <small class="text-muted">
+            Subject:
+            {{ exam.subject.subject_code if exam.subject else "N/A" }}
+        </small>
     </div>
 
     <div>
 
-      {% if access.status == "approved" %}
+        {% if exam.status == "approved" %}
 
-          <a href="{{ url_for('start_exam', exam_id=access.exam_id) }}"
-             class="btn btn-success">
-              Start Exam
-          </a>
+            <a href="{{ url_for('start_exam', exam_id=exam.id) }}"
+               class="btn btn-success">
 
-      {% elif access.status == "pending" %}
+                Start Exam
 
-          <button class="btn btn-warning" disabled>
-              Pending Approval
-          </button>
+            </a>
 
-      {% else %}
+        {% elif exam.status == "pending" %}
 
-          <button class="btn btn-primary request-btn"
-                  onclick="requestExam({{ access.exam_id }})">
-              Request Exam
-          </button>
+            <button class="btn btn-warning" disabled>
+                Pending Approval
+            </button>
 
-      {% endif %}
+        {% else %}
+
+            <button class="btn btn-primary request-btn"
+                    onclick="requestExam('{{ exam.id }}')">
+
+                Request Exam
+
+            </button>
+
+        {% endif %}
 
     </div>
 
-  </div>
+</div>
 
-  {% endfor %}
+{% endfor %}
 
 </div>
 
@@ -368,6 +377,51 @@ if (!studentId) {
     studentStream.onerror = function () {
         console.log("SSE disconnected or error");
     };
+}
+</script>
+
+<script>
+/* ================= REQUEST EXAM ================= */
+async function requestExam(examId) {
+
+    try {
+
+        const response = await fetch(`/request_exam/${examId}`, {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json"
+            }
+        });
+
+        const data = await response.json();
+
+        if (response.ok) {
+
+            alert(data.message || "Request sent!");
+
+            const btn = document.querySelector(
+                `button[onclick="requestExam(${examId})"]`
+            );
+
+            if (btn) {
+                btn.classList.remove("btn-primary");
+                btn.classList.add("btn-warning");
+                btn.disabled = true;
+                btn.textContent = "Pending Approval";
+            }
+
+        } else {
+
+            alert(data.error || "Failed to request exam.");
+
+        }
+
+    } catch (err) {
+
+        console.error("Request error:", err);
+        alert("Server error while requesting exam.");
+
+    }
 }
 </script>
 
