@@ -23,7 +23,7 @@ if (localStorage.getItem("darkMode") === "true") {
 }
 </script>
 
-<!-- DARK MODE (UNCHANGED) -->
+<!-- DARK MODE (CLEANED) -->
 <style>
 .dark-mode {
   background-color: #121212 !important;
@@ -44,24 +44,112 @@ if (localStorage.getItem("darkMode") === "true") {
   color: #e0e0e0 !important;
 }
 
-.dark-mode .sidebar {
-  background-color: #1a1a1a !important;
-}
-
-.dark-mode .btn-light {
-  background-color: #333 !important;
-  color: white !important;
-  border: 1px solid #555;
-}
-
-/* SIDEBAR */
-.sidebar {
+/* ================= SIDEBARS BASE ================= */
+.sidebar,
+.right-sidebar {
   width: 260px;
   min-height: 100vh;
   position: fixed;
+  top: 0;
+  z-index: 1000;
+  overflow-x: hidden;
+  overflow-y: auto;
+  transition: width 0.3s ease;
 }
 
-/* REAL-TIME EXAM PANEL */
+/* ================= LEFT SIDEBAR ================= */
+.sidebar {
+  left: 0;
+  background-color: #0d6efd;
+  display: flex;
+  flex-direction: column;
+}
+
+/* LEFT COLLAPSE */
+.sidebar.collapsed {
+  width: 70px;
+}
+
+/* Hide text when collapsed */
+.sidebar.collapsed .hide-on-collapse {
+  display: none !important;
+}
+
+/* Center icons when collapsed */
+.sidebar.collapsed a.btn {
+  justify-content: center;
+  padding-left: 0 !important;
+  padding-right: 0 !important;
+}
+
+/* Button layout */
+.sidebar a.btn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+/* Hide heavy UI blocks when collapsed */
+.sidebar.collapsed .card {
+  display: none;
+}
+
+/* ================= RIGHT SIDEBAR ================= */
+.right-sidebar {
+  right: 0;
+  background-color: #212529;
+  display: flex;
+  flex-direction: column;
+}
+
+/* RIGHT COLLAPSE (RAIL MODE) */
+.right-sidebar.collapsed {
+  width: 70px;
+}
+
+/* Hide all text when collapsed */
+.right-sidebar.collapsed .hide-on-collapse {
+  display: none !important;
+}
+
+/* Center everything in collapsed mode */
+.right-sidebar.collapsed .btn {
+  justify-content: center;
+}
+
+/* OPTIONAL: hide cards entirely when collapsed */
+.right-sidebar.collapsed .card {
+  display: none;
+}
+
+/* ================= MAIN CONTENT ================= */
+.main-content {
+  margin-left: 260px;
+  margin-right: 260px;
+  padding: 10px;
+  transition: margin 0.3s ease;
+}
+
+/* LEFT collapsed */
+.main-content.left-collapsed {
+  margin-left: 70px;
+}
+
+/* RIGHT collapsed */
+.main-content.right-collapsed {
+  margin-right: 70px;
+}
+
+/* ================= HEADER ================= */
+.sidebar-header,
+.right-sidebar .d-flex {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ================= UI HELPERS ================= */
 .exam-status {
   font-size: 13px;
 }
@@ -69,6 +157,21 @@ if (localStorage.getItem("darkMode") === "true") {
 .timer-box {
   font-size: 18px;
   font-weight: bold;
+}
+
+/* ================= MOBILE ================= */
+@media (max-width: 991px) {
+  .sidebar,
+  .right-sidebar {
+    position: relative;
+    width: 100%;
+    min-height: auto;
+  }
+
+  .main-content {
+    margin-left: 0;
+    margin-right: 0;
+  }
 }
 </style>
 
@@ -79,66 +182,61 @@ if (localStorage.getItem("darkMode") === "true") {
 <div class="d-flex">
 
 <!-- ================= SIDEBAR ================= -->
-<div class="bg-primary text-white p-3 sidebar">
+<div id="leftSidebar" class="bg-primary text-white p-3 sidebar collapsed">
 
-  <h5 class="text-center mb-4">Admin Panel</h5>
+  <!-- HEADER -->
+  <div class="sidebar-header mb-3">
+    <h5 class="mb-0 hide-on-collapse">Admin Panel</h5>
+
+    <button class="btn btn-light btn-sm" onclick="toggleLeftSidebar()">
+      <i class="bi bi-layout-sidebar-inset-reverse"></i>
+    </button>
+  </div>
 
   <!-- EXISTING FEATURES (UNCHANGED) -->
   <a href="{{ url_for('create_user') }}" class="btn btn-light w-100 mb-2">
-    <i class="bi bi-person-plus"></i> Create User
+    <i class="bi bi-person-plus"></i> <span class="hide-on-collapse">Create User</span>
   </a>
 
   <a href="{{ url_for('view_students') }}" class="btn btn-light w-100 mb-2">
-    <i class="bi bi-people"></i> View Students
+    <i class="bi bi-people"></i> <span class="hide-on-collapse">View Students</span>
   </a>
 
   <a href="{{ url_for('view_instructors') }}" class="btn btn-light w-100 mb-2">
-    <i class="bi bi-person-badge"></i> View Instructors
+    <i class="bi bi-person-badge"></i> <span class="hide-on-collapse">View Instructors</span>
   </a>
 
   <a href="{{ url_for('view_logs') }}" class="btn btn-light w-100 mb-2">
-    <i class="bi bi-journal-text"></i> Logs
+    <i class="bi bi-journal-text"></i> <span class="hide-on-collapse">Logs</span>
   </a>
 
-  <!-- NEW FEATURES (ADDED AS REQUESTED) -->
-  <hr>
-
-<a href="#" class="btn btn-warning w-100 mb-2"
-   data-bs-toggle="modal"
-   data-bs-target="#addSubjectModal">
-   <i class="bi bi-book"></i> Add Subject
-</a>
-
-<a href="#" class="btn btn-warning w-100 mb-2"
-   data-bs-toggle="modal"
-   data-bs-target="#createExamModal">
-   <i class="bi bi-file-earmark-text"></i> Create Exam
-</a>
-
-  <hr>
- 
   <!-- CHANGE PASSWORD (RESTORED) -->
   <a href="{{ url_for('change_password') }}" class="btn btn-warning w-100 mb-3">
-    <i class="bi bi-key"></i> Change Password
+    <i class="bi bi-key"></i> <span class="hide-on-collapse">Change Password</span>
   </a>
 
   <!-- ================= REAL-TIME EXAM STATUS ================= -->
   <div class="card bg-dark text-white p-2 mb-2 exam-status">
-    <h6 class="text-center">Exam Status</h6>
-    <div id="examStatus">Loading...</div>
+    <h6 class="text-center"><span class="hide-on-collapse">Exam Status</span></h6>
+    <span class="hide-on-collapse">
+    <div id="examStatus"></span>Loading...
+    </div>
   </div>
 
   <!-- ================= EXAM TIMER ================= -->
   <div class="card bg-secondary text-white p-2 timer-box text-center">
-    <div>Exam Timer</div>
-    <div id="examTimer">00:00:00</div>
+    <div><span class="hide-on-collapse">Exam Timer</span></div>
+    <span class="hide-on-collapse">
+    <div id="examTimer">
+    </span>
+    <span class="hide-on-collapse">00:00:00</span>
+    </div>
   </div>
 
 </div>
 
 <!-- ================= MAIN CONTENT ================= -->
-<div class="main-content flex-grow-1"
-     style="margin-left:260px; margin-right:260px;">
+<div class="main-content flex-grow-1 left-collapsed right-collapsed">
 
 <div class="container mt-4">
 
@@ -177,8 +275,32 @@ if (localStorage.getItem("darkMode") === "true") {
 
 <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
 
-  <!-- TITLE -->
+<!-- TITLE + TOGGLE + SUMMARY -->
+<div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-2">
+
   <h4 class="card-title mb-0">Students List</h4>
+
+  <div class="d-flex align-items-center gap-2 flex-wrap">
+
+    <!-- SUMMARY -->
+    <div id="studentsSummary"
+         class="alert alert-info py-1 px-2 mb-0 d-flex align-items-center gap-2">
+      👥 <strong>{{ students|length }}</strong> Students
+    </div>
+
+    <!-- TOGGLE -->
+    <button class="btn btn-outline-secondary btn-sm"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#studentsCollapse"
+            aria-expanded="true"
+            aria-controls="studentsCollapse">
+      <i class="bi bi-chevron-up"></i>
+      Toggle
+    </button>
+
+  </div>
+</div>
 
   <!-- SEARCH + BUTTONS GROUP -->
   <div class="d-flex flex-wrap align-items-center gap-2">
@@ -211,8 +333,9 @@ if (localStorage.getItem("darkMode") === "true") {
 
 </div>
 
-<div class="table-responsive">
-<table id="studentsTable" class="table table-bordered table-hover align-middle">
+<div class="collapse" id="studentsCollapse">
+  <div class="table-responsive">
+    <table id="studentsTable" class="table table-bordered table-hover align-middle">
 
 <thead class="table-light text-center">
 <tr>
@@ -259,237 +382,100 @@ if (localStorage.getItem("darkMode") === "true") {
 {% endfor %}
 </tbody>
 
-</table>
-</div>
+    </table>
+  </div>
 </div>
 
 <!-- ================= INSTRUCTORS ================= -->
 <div class="card shadow-sm p-3 mb-4">
-<h4>Instructors List</h4>
 
-<table class="table table-bordered">
-<thead>
-<tr>
-  <th>ID</th>
-  <th>Username</th>
-  <th>Role</th>
-</tr>
-</thead>
+  <div class="d-flex justify-content-between align-items-center mb-2">
 
-<tbody>
-{% for i in instructors %}
-<tr>
-  <td>{{ i.id }}</td>
-  <td>{{ i.username }}</td>
-  <td>{{ i.role }}</td>
-</tr>
-{% endfor %}
-</tbody>
-</table>
+    <h4 class="mb-0">Instructors List</h4>
+
+    <button class="btn btn-outline-secondary btn-sm"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#instructorsCollapse">
+      <i class="bi bi-chevron-down"></i>
+      Toggle
+    </button>
+
+  </div>
+
+  <div class="collapse" id="instructorsCollapse">
+
+    <table class="table table-bordered">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Username</th>
+          <th>Role</th>
+        </tr>
+      </thead>
+
+      <tbody>
+      {% for i in instructors %}
+        <tr>
+          <td>{{ i.id }}</td>
+          <td>{{ i.username }}</td>
+          <td>{{ i.role }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+
+    </table>
+
+  </div>
 </div>
 
 <!-- ================= LOGS (RESTORED) ================= -->
-    <div class="card shadow-sm p-3 mb-5">
-      <h4 class="card-title mb-3">Activity Logs</h4>
-      <div class="table-responsive">
-        <table class="table table-bordered table-hover align-middle">
-          <thead class="table-light text-center">
-            <tr>
-              <th>ID</th>
-              <th>User</th>
-              <th>Action</th>
-              <th>Timestamp</th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for log in logs %}
-            <tr>
-              <td>{{ log.id }}</td>
-              <td>{{ log.user }}</td>
-              <td>{{ log.action }}</td>
-              <td>{{ log.timestamp }}</td>
-            </tr>
-            {% else %}
-            <tr><td colspan="4" class="text-center">No logs found.</td></tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
-    </div>
+<div class="card shadow-sm p-3 mb-5">
+
+  <div class="d-flex justify-content-between align-items-center mb-2">
+
+    <h4 class="card-title mb-0">Activity Logs</h4>
+
+    <button class="btn btn-outline-secondary btn-sm"
+            type="button"
+            data-bs-toggle="collapse"
+            data-bs-target="#logsCollapse">
+      <i class="bi bi-chevron-down"></i>
+      Toggle
+    </button>
+
   </div>
 
-<!-- ================= MODALS GO HERE ================= -->
+  <div class="collapse" id="logsCollapse">
 
-<!-- ADD SUBJECT MODAL -->
-<div class="modal fade" id="addSubjectModal" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
+    <div class="table-responsive">
+      <table class="table table-bordered table-hover align-middle">
+        <thead class="table-light text-center">
+          <tr>
+            <th>ID</th>
+            <th>User</th>
+            <th>Action</th>
+            <th>Timestamp</th>
+          </tr>
+        </thead>
 
-      <form method="POST" action="{{ url_for('add_subject') }}">
-
-        <div class="modal-header">
-          <h5 class="modal-title">Add Subject</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-
-        <div class="modal-body">
-
-          <div class="mb-3">
-            <label>Subject Code</label>
-            <input type="text" name="subject_code" class="form-control" required>
-          </div>
-
-          <div class="mb-3">
-            <label>Subject Name</label>
-            <input type="text" name="subject_name" class="form-control" required>
-          </div>
-
-        </div>
-
-        <div class="modal-footer">
-          <button type="submit" class="btn btn-success">Save Subject</button>
-        </div>
-
-      </form>
-
+        <tbody>
+        {% for log in logs %}
+          <tr>
+            <td>{{ log.id }}</td>
+            <td>{{ log.user }}</td>
+            <td>{{ log.action }}</td>
+            <td>{{ log.timestamp }}</td>
+          </tr>
+        {% else %}
+          <tr>
+            <td colspan="4" class="text-center">No logs found.</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
     </div>
-  </div>
-</div>
 
-<!-- CREATE EXAM MODAL -->
-<div class="modal fade" id="createExamModal" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
-
-      <form method="POST"
-          action="{{ url_for('create_exam') }}"
-          enctype="multipart/form-data">
-
-        <div class="modal-header">
-          <h5 class="modal-title">Create Exam</h5>
-          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-        </div>
-
-        <div class="modal-body">
-
-          <div class="mb-3">
-            <label>Subject</label>
-            <select name="subject_id" class="form-control" required>
-              {% for subject in subjects %}
-                <option value="{{ subject.id }}">
-                  {{ subject.subject_code }} - {{ subject.subject_name }}
-                </option>
-              {% endfor %}
-            </select>
-          </div>
-
-          <div class="mb-3">
-            <label>Exam Title</label>
-            <input type="text" name="title" class="form-control" required>
-          </div>
-
-<!-- EXAM TYPE -->
-<div class="mb-3">
-    <label>Exam Type</label>
-
-    <select name="exam_type"
-            class="form-control"
-            required>
-
-        <option value="Quiz">Quiz</option>
-        <option value="Major Exam">Major Exam</option>
-        <option value="Activity">Activity</option>
-
-    </select>
-</div>
-
-<!-- TERM -->
-<div class="mb-3">
-    <label>Academic Term</label>
-
-    <select name="term"
-            class="form-control"
-            required>
-
-        <option value="Prelim">Prelim</option>
-        <option value="Midterm">Midterm</option>
-        <option value="Semi-Final">Semi-Final</option>
-        <option value="Final">Final</option>
-
-    </select>
-</div>
-
-<!-- SECTION -->
-<div class="mb-3">
-    <label>Section</label>
-
-    <input type="text"
-           name="section"
-           class="form-control"
-           placeholder="BSIT-1A"
-           required>
-</div>
-
-<!-- YEAR -->
-<div class="mb-3">
-    <label>Year Level</label>
-
-    <select name="year"
-            class="form-control"
-            required>
-
-        <option value="1">1st Year</option>
-        <option value="2">2nd Year</option>
-        <option value="3">3rd Year</option>
-        <option value="4">4th Year</option>
-
-    </select>
-</div>
-
-<!-- SCHOOL YEAR -->
-<div class="mb-3">
-    <label>School Year</label>
-
-    <input type="text"
-           name="school_year"
-           class="form-control"
-           placeholder="2025-2026"
-           required>
-</div>
-
-<!-- SEMESTER -->
-<div class="mb-3">
-    <label>Semester</label>
-
-    <select name="semester"
-            class="form-control"
-            required>
-
-        <option value="1st Semester">1st Semester</option>
-        <option value="2nd Semester">2nd Semester</option>
-
-    </select>
-</div>
-
-          <div class="mb-3">
-            <label>Description</label>
-            <textarea name="description" class="form-control"></textarea>
-          </div>
-
-          <div class="mb-3">
-            <label>Duration (minutes)</label>
-            <input type="number" name="duration_minutes" class="form-control" value="30">
-          </div>
-
-        </div>
-
-        <div class="modal-footer">
-          <button type="submit" class="btn btn-warning">Create Exam</button>
-        </div>
-
-      </form>
-
-    </div>
   </div>
 </div>
 
@@ -593,55 +579,108 @@ setInterval(updateTimer,1000);
 </script>
 
 <!-- ================= RIGHT SIDEBAR ================= -->
-<div class="right-sidebar bg-dark text-white p-3">
+<div id="rightSidebar" class="right-sidebar bg-dark text-white p-3 collapsed">
 
-    <h5 class="text-center mb-3">
-        Question Bank
-    </h5>
+    <!-- HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
 
-    <!-- ADD QUESTIONS DROPDOWN -->
-    <div class="dropdown mb-3">
+        <h5 class="mb-0 hide-on-collapse">
+            Exam Management
+        </h5>
 
-        <button class="btn btn-success w-100 dropdown-toggle"
-                type="button"
-                data-bs-toggle="dropdown">
+        <!-- COLLAPSE BUTTON -->
+        <button class="btn btn-outline-light btn-sm"
+                onclick="toggleRightSidebar()">
 
-            <i class="bi bi-plus-circle"></i>
-            Add Questions
+            <i class="bi bi-layout-sidebar-inset"></i>
 
         </button>
 
-        <ul class="dropdown-menu dropdown-menu-end w-100">
+    </div>
 
-{% for exam in exams %}
+    <!-- ================= SUBJECTS ================= -->
 
-<li>
-    <a class="dropdown-item"
-       href="{{ url_for('add_question', exam_id=exam.id) }}">
+    <div class="card bg-secondary text-white border-0 mb-3">
 
-        {{ exam.subject.subject_code }} -
-        {{ exam.title }}
+        <div class="card-body">
 
-    </a>
-</li>
+            <h6 class="mb-3">
+                <i class="bi bi-book"></i>
+                <span class="hide-on-collapse">Subjects</span>
+            </h6>
 
-{% endfor %}
+            <!-- VIEW SUBJECTS -->
+            <a href="{{ url_for('view_subjects') }}"
+               class="btn btn-info w-100 mb-2">
 
-        </ul>
+                <i class="bi bi-eye"></i>
+                <span class="hide-on-collapse">View Subjects</span>
+
+            </a>
+
+        </div>
 
     </div>
 
-  <hr>
+    <!-- ================= EXAMS ================= -->
 
-<a href="{{ url_for('view_exams') }}"
-   class="btn btn-info w-100 mb-2">
+    <div class="card bg-secondary text-white border-0">
 
-   <i class="bi bi-eye"></i>
-   View Exams
+        <div class="card-body">
 
-</a>
+            <h6 class="mb-3">
+                <i class="bi bi-file-earmark-text"></i>
+                <span class="hide-on-collapse">Exams</span>
+            </h6>
 
-  <hr>
+            <!-- VIEW EXAMS -->
+            <a href="{{ url_for('view_exams') }}"
+               class="btn btn-info w-100 mb-3"
+               title="View Exams">
+
+               <i class="bi bi-eye"></i>
+               <span class="hide-on-collapse">View Exams</span>
+
+            </a>
+
+            <!-- ADD QUESTIONS -->
+            <div class="dropdown">
+
+                <button class="btn btn-success w-100 dropdown-toggle"
+                        type="button"
+                        data-bs-toggle="dropdown">
+
+                    <i class="bi bi-patch-question"></i>
+                    <span class="hide-on-collapse">Add Questions</span>
+
+                </button>
+
+                <ul class="dropdown-menu dropdown-menu-end w-100">
+
+                    {% for exam in exams %}
+
+                    <li>
+
+                        <a class="dropdown-item"
+                           href="{{ url_for('add_question', exam_id=exam.id) }}">
+
+                            {{ exam.subject.subject_code }}
+                            -
+                            {{ exam.title }}
+
+                        </a>
+
+                    </li>
+
+                    {% endfor %}
+
+                </ul>
+
+            </div>
+
+        </div>
+
+    </div>
 
 </div>
 
@@ -668,6 +707,123 @@ window.addEventListener("DOMContentLoaded", () => {
 
 });
 
+</script>
+
+<script>
+
+/* ================= RIGHT SIDEBAR TOGGLE ================= */
+
+function toggleRightSidebar(){
+
+    const sidebar = document.getElementById("rightSidebar");
+    const content = document.querySelector(".main-content");
+
+    sidebar.classList.toggle("collapsed");
+
+    if(sidebar.classList.contains("collapsed")){
+        content.classList.add("right-collapsed");
+    } else {
+        content.classList.remove("right-collapsed");
+    }
+}
+
+function toggleLeftSidebar(){
+
+    const sidebar = document.getElementById("leftSidebar");
+    const content = document.querySelector(".main-content");
+
+    sidebar.classList.toggle("collapsed");
+
+    if(sidebar.classList.contains("collapsed")){
+        content.classList.add("left-collapsed");
+    } else {
+        content.classList.remove("left-collapsed");
+    }
+}
+
+</script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  const btn = document.querySelector('[data-bs-target="#studentsCollapse"]');
+  const icon = btn.querySelector("i");
+
+  const collapseEl = document.getElementById("studentsCollapse");
+
+  collapseEl.addEventListener("shown.bs.collapse", function () {
+    icon.classList.remove("bi-chevron-down");
+    icon.classList.add("bi-chevron-up");
+  });
+
+  collapseEl.addEventListener("hidden.bs.collapse", function () {
+    icon.classList.remove("bi-chevron-up");
+    icon.classList.add("bi-chevron-down");
+  });
+});
+</script>
+
+<!-- ================================== -->
+<!-- ========= summary script ========= -->
+<!-- ================================== -->
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+  function setupCollapse(collapseId) {
+
+    const collapseEl = document.getElementById(collapseId);
+    if (!collapseEl) return;
+
+    const btn = document.querySelector(`[data-bs-target="#${collapseId}"]`);
+    if (!btn) return;
+
+    const icon = btn.querySelector("i");
+
+    // sync initial state
+    if (!collapseEl.classList.contains("show") && icon) {
+      icon.classList.remove("bi-chevron-up");
+      icon.classList.add("bi-chevron-down");
+    }
+
+    collapseEl.addEventListener("shown.bs.collapse", () => {
+      if (icon) {
+        icon.classList.remove("bi-chevron-down");
+        icon.classList.add("bi-chevron-up");
+      }
+    });
+
+    collapseEl.addEventListener("hidden.bs.collapse", () => {
+      if (icon) {
+        icon.classList.remove("bi-chevron-up");
+        icon.classList.add("bi-chevron-down");
+      }
+    });
+
+  }
+
+  // APPLY TO ALL SECTIONS
+  setupCollapse("studentsCollapse");
+  setupCollapse("instructorsCollapse");
+  setupCollapse("logsCollapse");
+
+});
+</script>
+
+<!-- ================================== -->
+<!-- ====== mobile auto-collapse ====== -->
+<!-- ================================== -->
+<script>
+function handleResponsiveCollapse() {
+  const el = document.getElementById("studentsCollapse");
+  if (!el) return;
+
+  const bs = bootstrap.Collapse.getOrCreateInstance(el);
+
+  if (window.innerWidth < 768) {
+    bs.hide();
+  } else {
+    bs.show();
+  }
+}
 </script>
 
 </body>
