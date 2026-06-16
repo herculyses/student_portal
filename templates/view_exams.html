@@ -5,6 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>View Exams</title>
 
+{% with messages = get_flashed_messages(with_categories=true) %}
+{% if messages %}
+    {% for category, message in messages %}
+        <div class="alert alert-{{ category }}">
+            {{ message }}
+        </div>
+    {% endfor %}
+{% endif %}
+{% endwith %}
+
 <link rel="icon" type="image/png"
       href="{{ url_for('static', filename='favicon.png') }}">
 
@@ -36,6 +46,10 @@ if (localStorage.getItem("darkMode") === "true") {
     background-color: #2a2a2a !important;
 }
 
+.dark-mode .text-muted {
+    color: #cfcfcf !important; /* or #e0e0e0 for brighter text */
+}
+
 .delete-zone {
     border-top: 1px solid #dc3545;
     margin-top: 15px;
@@ -52,10 +66,29 @@ if (localStorage.getItem("darkMode") === "true") {
 
     <!-- HEADER -->
     <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="bi bi-file-earmark-text"></i> View Exams</h2>
-        <a href="{{ url_for('dashboard_admin') }}" class="btn btn-secondary">
-            <i class="bi bi-arrow-left"></i> Back
-        </a>
+
+        <h2>
+            <i class="bi bi-file-earmark-text"></i> View Exams
+        </h2>
+
+        <div class="d-flex gap-2">
+
+            <!-- CREATE EXAM -->
+            <button type="button"
+                    class="btn btn-primary"
+                    data-bs-toggle="modal"
+                    data-bs-target="#createExamModal">
+
+                <i class="bi bi-plus-circle"></i> Create Exam
+            </button>
+
+            <!-- BACK -->
+            <a href="{{ url_for('dashboard_admin') }}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Back
+            </a>
+
+        </div>
+
     </div>
 
     {% for exam in exams %}
@@ -67,19 +100,19 @@ if (localStorage.getItem("darkMode") === "true") {
             <div class="d-flex justify-content-between align-items-start mb-3">
                 <div>
                     <h4 class="mb-1">{{ exam.title }}</h4>
-
                     <p class="text-muted mb-1">
                         {{ exam.subject.subject_code }} - {{ exam.subject.subject_name }}
                     </p>
 
                     <small class="text-muted">
-                        {{ exam.term or "No Term" }} |
-                        {{ exam.exam_type or "No Type" }} |
-                        {{ exam.year or "No Year" }} |
-                        {{ exam.section or "No Section" }} |
-                        {{ exam.semester or "No Semester" }} |
-                        {{ exam.school_year or "No School Year" }} |
-                        {{ exam.duration_minutes }} mins
+                        <strong>Term:</strong> {{ exam.term or "No Term" }} |
+                        <strong>Type:</strong> {{ exam.exam_type or "No Type" }} |
+                        <strong>Year:</strong> {{ exam.year or "No Year" }} |
+                        <strong>Section:</strong> {{ exam.section or "No Section" }} |
+                        <strong>Semester:</strong> {{ exam.semester or "No Semester" }} |
+                        <strong>AY:</strong> {{ exam.school_year or "No School Year" }} |
+                        <strong>Code:</strong>{{ exam.access_code or "No Code" }} |
+                        <strong>Duration:</strong> {{ exam.duration_minutes }} mins
                     </small>
                 </div>
 
@@ -95,18 +128,13 @@ if (localStorage.getItem("darkMode") === "true") {
             <!-- ACTIONS -->
             <div class="d-flex flex-wrap gap-2 mb-3">
 
-                    <button type="button"
-                            class="btn btn-primary btn-sm"
-                            data-bs-toggle="modal"
-                            data-bs-target="#createExamModal">
-                        <i class="bi bi-plus-circle"></i> Create Exam
-                    </button>
-
-                <a href="{{ url_for('edit_exam', exam_id=exam.id) }}" class="btn btn-primary btn-sm">
+                <a href="{{ url_for('edit_exam', exam_id=exam.id) }}"
+                   class="btn btn-primary btn-sm">
                     <i class="bi bi-pencil"></i> Edit
                 </a>
 
-                <a href="{{ url_for('add_question', exam_id=exam.id) }}" class="btn btn-success btn-sm">
+                <a href="{{ url_for('add_question', exam_id=exam.id) }}"
+                   class="btn btn-success btn-sm">
                     <i class="bi bi-plus-circle"></i> Add Questions
                 </a>
 
@@ -120,7 +148,6 @@ if (localStorage.getItem("darkMode") === "true") {
                     <button class="btn btn-danger btn-sm">
                         <i class="bi bi-stop-circle"></i> End
                     </button>
-
                 </form>
 
             </div>
@@ -130,29 +157,9 @@ if (localStorage.getItem("darkMode") === "true") {
                 <button class="btn btn-outline-danger btn-sm"
                         data-bs-toggle="modal"
                         data-bs-target="#deleteModal"
-                        onclick="setDeleteExam({{ exam.id }}, {{ exam.title | tojson }})">
+                        onclick="setDeleteExam('{{ exam.id }}', '{{ exam.title }}')">
                     <i class="bi bi-trash"></i> Delete Exam
                 </button>
-            </div>
-            <!-- ============================= -->
-            <!-- LIVE REQUESTS (SOCKET.IO) -->
-            <!-- ============================= -->
-
-            <h5 class="mt-4">Live Requests</h5>
-
-            <div class="table-responsive">
-                <table class="table table-sm table-bordered">
-                    <thead class="table-light">
-                        <tr>
-                            <th>Student ID</th>
-                            <th>Exam ID</th>
-                            <th>Status</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-
-                    <tbody id="requestQueue"></tbody>
-                </table>
             </div>
 
             <!-- ============================= -->
@@ -164,62 +171,79 @@ if (localStorage.getItem("darkMode") === "true") {
                     <thead class="table-light text-center">
                         <tr>
                             <th>Student ID</th>
-                            <th>Name</th>
-                            <th>Year</th>
-                            <th>Section</th>
-                            <th>Semester</th>
-                            <th>School Year</th>
-                            <th>Status</th>
+                            <th>Student Name</th>
+                            <th>Access Status</th>
                             <th>Action</th>
                         </tr>
                     </thead>
 
                     <tbody>
-                        {% for student in exam_students[exam.id] %}
 
-                            {% set access = access_map.get((student.student_id, exam.id)) %}
+                    {% for student in exam_students[exam.id] %}
 
-                            <tr id="row-{{ student.student_id }}-{{ exam.id }}">
+                        {% set access = access_map.get((student.student_id, exam.id)) %}
 
-                                <td>{{ student.student_id }}</td>
-                                <td>{{ student.name }}</td>
-                                <td>{{ student.year }}</td>
-                                <td>{{ student.section }}</td>
-                                <td>{{ student.semester }}</td>
-                                <td>{{ student.school_year }}</td>
+                        <tr>
 
-                                <!-- STATUS -->
-                                <td id="status-{{ student.student_id }}-{{ exam.id }}">
-                                    {% if access and access.status == "approved" %}
+                            <td class="text-center">
+                                {{ student.student_id }}
+                            </td>
+
+                            <td>
+                                {{ student.name }}
+                            </td>
+
+                            <td id="status-{{ student.student_id }}-{{ exam.id }}" class="text-center">
+
+                                {% if access %}
+
+                                    {% if access.status == "approved" %}
                                         <span class="badge bg-success">Approved</span>
-                                    {% elif access and access.status == "pending" %}
+
+                                    {% elif access.status == "pending" %}
                                         <span class="badge bg-warning text-dark">Pending</span>
-                                    {% else %}
-                                        <span class="badge bg-secondary">No Request</span>
+
                                     {% endif %}
-                                </td>
 
-                                <!-- ACTION -->
-                                <td id="action-{{ student.student_id }}-{{ exam.id }}">
-                                    {% if access and access.status == "pending" %}
-                                        <a href="{{ url_for('approve_request', access_id=access.id) }}"
-                                           class="btn btn-warning btn-sm">
-                                            Approve
-                                        </a>
+                                {% else %}
 
-                                    {% elif access and access.status == "approved" %}
-                                        <button class="btn btn-success btn-sm" disabled>
-                                            Approved
-                                        </button>
+                                    <span class="badge bg-secondary">
+                                        No Request
+                                    </span>
 
-                                    {% else %}
-                                        <span class="text-muted">No Request</span>
-                                    {% endif %}
-                                </td>
+                                {% endif %}
 
-                            </tr>
+                            </td>
 
-                        {% endfor %}
+                            <td id="action-{{ student.student_id }}-{{ exam.id }}" class="text-center">
+
+                                {% if access and access.status == "pending" %}
+
+                                    <a href="{{ url_for('approve_request', access_id=access.id) }}"
+                                       class="btn btn-success btn-sm">
+
+                                        Approve
+
+                                    </a>
+
+                                {% elif access and access.status == "approved" %}
+
+                                    <button class="btn btn-secondary btn-sm" disabled>
+                                        Approved
+                                    </button>
+
+                                {% else %}
+
+                                    <span class="text-muted">—</span>
+
+                                {% endif %}
+
+                            </td>
+
+                        </tr>
+
+                    {% endfor %}
+
                     </tbody>
                 </table>
             </div>
@@ -271,7 +295,7 @@ if (localStorage.getItem("darkMode") === "true") {
           enctype="multipart/form-data">
 
         <div class="modal-header">
-          <h5 class="modal-title">Create Exam</h5>
+
           <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
         </div>
 
@@ -417,17 +441,41 @@ if (localStorage.getItem("darkMode") === "true") {
           </div>
 
           <div class="mb-3">
-            <label>Duration (minutes)</label>
-            <input type="number" name="duration_minutes" class="form-control" value="30">
+              <label>Access Code</label>
+
+              <input type="text"
+                     name="access_code"
+                     class="form-control"
+                     placeholder="Example: GE123MIDTERM"
+                     required>
           </div>
 
-        </div>
+          <div class="mb-3">
+              <label>Duration (minutes)</label>
+              <input type="number"
+                     name="duration_minutes"
+                     class="form-control"
+                     value="30">
+          </div>
 
-        <div class="modal-footer">
-          <button type="submit" class="btn btn-warning">Create Exam</button>
-        </div>
+          </div>
 
-      </form>
+          <div class="modal-footer">
+
+              <button type="button"
+                      class="btn btn-secondary"
+                      data-bs-dismiss="modal">
+                  Cancel
+              </button>
+
+              <button type="submit"
+                      class="btn btn-primary">
+                  Create Exam
+              </button>
+
+          </div>
+
+          </form>
 
     </div>
   </div>
@@ -436,53 +484,109 @@ if (localStorage.getItem("darkMode") === "true") {
 <!-- SCRIPTS -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
-
 <script>
 function setDeleteExam(id, title) {
+
+    console.log("DELETE EXAM ID:", id);
+
     document.getElementById("examTitle").innerText = title;
-    document.getElementById("deleteForm").action = "/delete-exam/" + id;
+
+    document.getElementById("deleteForm").action =
+        "/delete-exam/" + id;
+
+    console.log(
+        "FORM ACTION:",
+        document.getElementById("deleteForm").action
+    );
 }
 </script>
 
 <script>
 const adminStream = new EventSource("/stream/admin");
 
+adminStream.onopen = function () {
+    console.log("✅ SSE CONNECTED");
+};
+
+adminStream.onerror = function (e) {
+    console.log("❌ SSE ERROR", e);
+};
+
 adminStream.addEventListener("new_request", function (e) {
+
     const data = JSON.parse(e.data);
-    console.log("New exam request:", data);
+
+    console.log("📨 New exam request:", data);
+
     addToQueue(data);
 });
 
 function addToQueue(data) {
-    const id = `req-${data.student_id}-${data.exam_id}`;
 
-    if (document.getElementById(id)) return;
+    console.log("SSE DATA:", data);
 
-    const row = `
-        <tr id="${id}">
-            <td>${data.student_id}</td>
-            <td>${data.exam_id}</td>
-            <td><span class="badge bg-warning">Pending</span></td>
-            <td>
-                <button class="btn btn-success btn-sm"
-                        onclick="approveRequest(${data.exam_id}, '${data.student_id}')">
-                    Approve
-                </button>
-            </td>
-        </tr>
-    `;
+    console.log(
+        `LOOKING FOR:
+        status-${data.student_id}-${data.exam_id}`
+    );
 
-    document.getElementById("requestQueue")
-        .insertAdjacentHTML("beforeend", row);
+    console.log("LIVE REQUEST:", data);
+
+    console.log(
+        `LOOKING FOR:
+        status-${data.student_id}-${data.exam_id}`
+    );
+
+    const statusCell = document.getElementById(
+        `status-${data.student_id}-${data.exam_id}`
+    );
+
+    const actionCell = document.getElementById(
+        `action-${data.student_id}-${data.exam_id}`
+    );
+
+    console.log("STATUS CELL:", statusCell);
+    console.log("ACTION CELL:", actionCell);
+
+    if (statusCell && actionCell) {
+
+        statusCell.innerHTML = `
+            <span class="badge bg-warning text-dark">
+                Pending
+            </span>
+        `;
+
+        actionCell.innerHTML = `
+            <button class="btn btn-success btn-sm"
+                    onclick="approveRequest(${data.access_id})">
+
+                Approve
+
+            </button>
+        `;
+
+    } else {
+
+        console.log("❌ Student row not found.");
+
+    }
 }
 
-function approveRequest(examId, studentId) {
-    fetch(`/approve/${examId}/${studentId}`, {
-        method: "POST"
+function approveRequest(accessId) {
+
+    fetch(`/approve-request/${accessId}`, {
+        method: "GET"
     })
-    .then(res => res.json())
-    .then(data => {
-        console.log("Approved:", data);
+    .then(response => {
+
+        console.log("APPROVE RESPONSE:", response);
+
+        // force refresh after approval
+        window.location.reload();
+
+    })
+    .catch(error => {
+        console.error("APPROVE ERROR:", error);
     });
 }
 </script>

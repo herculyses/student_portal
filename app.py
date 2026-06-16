@@ -90,6 +90,8 @@ class Student(db.Model):
     semester = db.Column(db.String(20))
 
     subject = db.Column(db.String(100), primary_key=True)
+    subject_name = db.Column(db.String(100))
+    subject_code = db.Column(db.String(50))
 
     # Attendance
     midterm_attendance1 = db.Column(db.String(10), default='0')
@@ -223,6 +225,7 @@ class Exam(db.Model):
     year = db.Column(db.String(20))
     school_year = db.Column(db.String(20))
     semester = db.Column(db.String(20))
+    access_code = db.Column(db.String(100),nullable=True)
 
     description = db.Column(db.Text)
     duration_minutes = db.Column(db.Integer, default=30)
@@ -258,6 +261,7 @@ class ExamAttempt(db.Model):
 
     student_id = db.Column(
         db.String(100),
+        db.ForeignKey('student.student_id'),
         nullable=False
     )
 
@@ -300,23 +304,25 @@ class ExamAccess(db.Model):
 
     student_id = db.Column(
         db.String(100),
+        db.ForeignKey('student.student_id'),
         nullable=False
     )
 
-    status = db.Column(
-        db.String(20),
-        default="pending"
+    entered_code = db.Column(
+        db.String(100)
     )
-    # pending | approved | rejected
 
-    has_started = db.Column(db.Boolean, default=False)
-    has_finished = db.Column(db.Boolean, default=False)
+    status = db.Column(db.String(20), default="pending")
 
-    approved_by = db.Column(db.String(100))
-    approved_at = db.Column(db.DateTime)
+    student = db.relationship(
+        'Student',
+        lazy=True
+    )
 
-    # ✅ ADD THIS (CRITICAL FIX)
-    exam = db.relationship('Exam', backref='access_records')
+    exam = db.relationship(
+        'Exam',
+        backref='access_records'
+    )
 
 class StudentAnswer(db.Model):
     __tablename__ = 'student_answers'
@@ -356,6 +362,8 @@ class StudentForm(FlaskForm):
     name = StringField('Name', validators=[DataRequired()])
     section = StringField('Section', validators=[Optional()])
     subject = StringField('Subject', validators=[Optional()])
+    subject_name = StringField('Subject Name', validators=[Optional()])
+    subject_code = StringField('Subject Code', validators=[Optional()])
 
     # Attendance
     midterm_attendance1 = StringField('Midterm Attendance 1', validators=[Optional()])
@@ -992,6 +1000,8 @@ def create_exam():
         school_year=request.form.get('school_year'),
         semester=request.form.get('semester'),
 
+        access_code=request.form.get('access_code'),
+
         description=request.form.get('description'),
         duration_minutes=request.form.get('duration_minutes')
     )
@@ -1008,6 +1018,8 @@ def create_exam():
 @login_required(role=['Admin', 'Instructor'])
 def view_exams():
 
+    print("===== VIEW_EXAMS ROUTE HIT =====")
+
     subjects = Subject.query.all()
 
     exams = Exam.query.order_by(
@@ -1016,44 +1028,37 @@ def view_exams():
 
     access_records = ExamAccess.query.all()
 
+    for a in access_records:
+        print(
+            "ACCESS:",
+            a.student_id,
+            a.exam_id,
+            a.status
+        )
+
     access_map = {
         (a.student_id, a.exam_id): a
-        for a in access_records
+        for a in ExamAccess.query.all()
     }
 
-    # ✅ exam_id -> filtered students
     exam_students = {}
 
     for exam in exams:
 
-        print("EXAM DEBUG:")
-        print(exam.subject.subject_code)
-        print(exam.semester)
-        print(exam.school_year)
-        print(exam.section)
-        print(exam.year)
-        print("--------------")
+        students = (
+            db.session.query(Student)
+            .join(
+                ExamAccess,
+                Student.student_id == ExamAccess.student_id
+            )
+            .filter(
+                ExamAccess.exam_id == exam.id
+            )
+            .distinct()
+            .all()
+        )
 
-        query = Student.query
-
-        if exam.subject:
-            query = query.filter_by(subject=exam.subject.subject_code)
-
-        if exam.semester:
-            query = query.filter_by(semester=exam.semester)
-
-        if exam.school_year:
-            query = query.filter_by(school_year=exam.school_year)
-
-        if exam.section:
-            query = query.filter_by(section=exam.section)
-
-        if exam.year:
-            query = query.filter_by(year=exam.year)
-
-        filtered_students = query.all()
-
-        exam_students[exam.id] = filtered_students
+        exam_students[exam.id] = students
 
     return render_template(
         'view_exams.html',
@@ -1512,39 +1517,142 @@ def start_exam(exam_id):
         question_id=first_question.id
     ))
 
-@app.route("/request_exam/<int:exam_id>", methods=["POST"])
+@app.route("/request_exam", methods=["POST"])
 @login_required(role=['Admin', 'Instructor', 'Student'])
-def request_exam(exam_id):
+def request_exam():
 
-    print("REQUEST EXAM HIT")
+    print("===== REQUEST EXAM ROUTE HIT =====")
 
+    # ==============================
+    # GET FORM DATA
+    # ==============================
+    exam_id = request.form.get("exam_id")
+    access_code = request.form.get("access_code")
+
+    print("EXAM ID:", exam_id)
+    print("ACCESS CODE:", access_code)
+
+    if not exam_id:
+        flash("Exam ID missing.", "danger")
+        return redirect(url_for("dashboard_student"))
+
+    # ==============================
+    # FIND EXAM
+    # ==============================
+    exam = Exam.query.get(int(exam_id))
+
+    if not exam:
+        flash("Exam not found.", "danger")
+        return redirect(url_for("dashboard_student"))
+
+    # ==============================
+    # FIND STUDENT
+    # ==============================
     student = Student.query.filter_by(
         user_id=session["user_id"]
     ).first()
 
-    if not student:
-        return jsonify({"error": "Student not found"}), 404
+    print("FOUND STUDENT:", student)
 
+    if not student:
+        flash("Student record not found.", "danger")
+        return redirect(url_for("dashboard_student"))
+
+    # ==============================
+    # VALIDATE ACCESS CODE
+    # ==============================
+    if exam.access_code:
+
+        if not access_code:
+            flash("Access code is required.", "danger")
+            return redirect(url_for("dashboard_student"))
+
+        if access_code.strip() != exam.access_code.strip():
+
+            flash(
+                "Invalid access code.",
+                "danger"
+            )
+
+            return redirect(
+                url_for("dashboard_student")
+            )
+
+    # ==============================
+    # CHECK EXISTING REQUEST
+    # ==============================
     existing = ExamAccess.query.filter_by(
         student_id=student.student_id,
-        exam_id=exam_id
+        exam_id=exam.id
     ).first()
 
-    if existing:
-        return jsonify({"error": "Already requested"}), 400
+    print("EXISTING:", existing)
 
+    if existing:
+
+        if existing.status == "approved":
+
+            flash(
+                "You already have access to this exam.",
+                "info"
+            )
+
+            return redirect(
+                url_for("dashboard_student")
+            )
+
+        if existing.status == "pending":
+
+            flash(
+                "Your request is still pending approval.",
+                "warning"
+            )
+
+            return redirect(
+                url_for("dashboard_student")
+            )
+
+    # ==============================
+    # CREATE ACCESS RECORD
+    # ==============================
     request_access = ExamAccess(
         student_id=student.student_id,
-        exam_id=exam_id,
+        exam_id=exam.id,
+        entered_code=access_code,
         status="pending"
     )
 
     db.session.add(request_access)
     db.session.commit()
 
-    return jsonify({
-        "message": "Exam request submitted successfully"
+    print("ACCESS SAVED")
+
+    # ==============================
+    # SSE NOTIFICATION
+    # ==============================
+    if "admin" not in sse_events:
+        sse_events["admin"] = []
+
+    sse_events["admin"].append({
+        "event": "new_request",
+        "data": {
+            "access_id": request_access.id,
+            "student_id": str(student.student_id).strip(),
+            "exam_id": exam.id,
+            "status": request_access.status
+        }
     })
+
+    print("SSE EVENT ADDED")
+
+    flash(
+        "Exam access granted successfully.",
+        "success"
+    )
+
+    return redirect(
+        url_for("dashboard_student")
+    )
 
 @app.route('/exam/<int:exam_id>/take/<int:question_id>')
 @login_required(role=['Admin', 'Instructor', 'Student'])
@@ -1873,18 +1981,6 @@ def approve_request(access_id):
 
     return redirect(url_for('view_exams'))
 
-@app.route('/approve-attempt/<int:attempt_id>')
-@login_required(role=['Admin', 'Instructor'])
-def approve_attempt(attempt_id):
-
-    attempt = ExamAttempt.query.get_or_404(attempt_id)
-
-    attempt.status = "approved"
-    db.session.commit()
-
-    flash("Student approved for exam.", "success")
-    return redirect(url_for('view_exams'))
-
 @app.route('/start-exam/<int:exam_id>', methods=['POST'])
 @login_required(role=['Instructor', 'Admin'])
 def admin_start_exam(exam_id):
@@ -1913,38 +2009,99 @@ def end_exam(exam_id):
 @login_required(role=['Admin', 'Instructor'])
 def delete_exam(exam_id):
 
-    exam = Exam.query.get_or_404(exam_id)
+    print("===== DELETE EXAM ROUTE HIT =====")
+    print("EXAM ID:", exam_id)
 
-    # 1. Get attempts linked to exam
-    attempts = ExamAttempt.query.filter_by(exam_id=exam.id).all()
+    try:
 
-    for attempt in attempts:
+        # =========================
+        # FIND EXAM
+        # =========================
+        exam = Exam.query.get_or_404(exam_id)
 
-        # delete answers per attempt (SAFE even if empty)
-        StudentAnswer.query.filter_by(attempt_id=attempt.id).delete()
+        print("FOUND EXAM:", exam.title)
 
-    # 2. delete all attempts
-    ExamAttempt.query.filter_by(exam_id=exam.id).delete()
+        # =========================
+        # DELETE STUDENT ANSWERS
+        # =========================
+        attempts = ExamAttempt.query.filter_by(
+            exam_id=exam.id
+        ).all()
 
-    # 3. delete access records
-    ExamAccess.query.filter_by(exam_id=exam.id).delete()
+        print("ATTEMPTS FOUND:", len(attempts))
 
-    # 4. delete questions (if none, nothing happens)
-    Question.query.filter_by(exam_id=exam.id).delete()
+        for attempt in attempts:
 
-    # 5. finally delete exam itself
-    db.session.delete(exam)
+            StudentAnswer.query.filter_by(
+                attempt_id=attempt.id
+            ).delete()
 
-    db.session.commit()
+        print("STUDENT ANSWERS DELETED")
 
-    flash("Exam deleted successfully!", "success")
+        # =========================
+        # DELETE EXAM ATTEMPTS
+        # =========================
+        ExamAttempt.query.filter_by(
+            exam_id=exam.id
+        ).delete()
+
+        print("EXAM ATTEMPTS DELETED")
+
+        # =========================
+        # DELETE EXAM ACCESS
+        # =========================
+        ExamAccess.query.filter_by(
+            exam_id=exam.id
+        ).delete()
+
+        print("EXAM ACCESS RECORDS DELETED")
+
+        # =========================
+        # DELETE QUESTIONS
+        # =========================
+        Question.query.filter_by(
+            exam_id=exam.id
+        ).delete()
+
+        print("QUESTIONS DELETED")
+
+        # =========================
+        # DELETE EXAM
+        # =========================
+        db.session.delete(exam)
+
+        print("EXAM MARKED FOR DELETION")
+
+        # =========================
+        # COMMIT
+        # =========================
+        db.session.commit()
+
+        print("DELETE COMMITTED SUCCESSFULLY")
+
+        flash(
+            f'Exam "{exam.title}" deleted successfully.',
+            'success'
+        )
+
+    except Exception as e:
+
+        db.session.rollback()
+
+        print("DELETE ERROR:", str(e))
+
+        flash(
+            f"Delete failed: {str(e)}",
+            "danger"
+        )
+
     return redirect(url_for('view_exams'))
 
 # =========================
 # SSE ROUTE
 # =========================
 @app.route('/stream/<user_id>')
-@login_required(role=['Admin', 'Instructor'])
+@login_required(role=['Admin', 'Instructor', 'Student'])
 def stream(user_id):
 
     def event_stream():
@@ -1958,9 +2115,20 @@ def stream(user_id):
                 yield f"event: {event['event']}\n"
                 yield f"data: {json.dumps(event['data'])}\n\n"
 
+            else:
+                # heartbeat
+                yield "data: ping\n\n"
+
             time.sleep(1)
 
-    return Response(stream_with_context(event_stream()), mimetype="text/event-stream")
+    return Response(
+        stream_with_context(event_stream()),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no"
+        }
+    )
 
 # =========================================================
 # 7. 📊 STATUS API
@@ -3403,7 +3571,7 @@ if __name__ == '__main__':
     ENV = os.environ.get('FLASK_ENV', 'development')
 
     if ENV == 'development':
-        app.run(debug=True)
+        app.run(debug=True, threaded=True)
     else:
         from waitress import serve
         serve(app, host='0.0.0.0', port=5000)

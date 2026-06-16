@@ -129,3 +129,33 @@ document.addEventListener("DOMContentLoaded", function() {
             }
         });
     };
+});
+
+// =========================
+// REQUEST EXAM
+// =========================
+
+window.requestExam = function(examId) {
+
+    fetch(`/request_exam/${examId}`, {
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json"
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+
+        alert(data.message);
+
+        if (data.success) {
+            location.reload();
+        }
+
+    })
+    .catch(error => {
+        console.error(error);
+        alert("Request failed.");
+    });
+
+};

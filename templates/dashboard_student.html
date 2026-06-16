@@ -288,11 +288,12 @@ if (localStorage.getItem("darkMode") === "true") {
 
         {% else %}
 
-            <button class="btn btn-primary request-btn"
-                    onclick="requestExam('{{ exam.id }}')">
+            <button class="btn btn-primary"
+                    data-bs-toggle="modal"
+                    data-bs-target="#requestExamModal"
+                    onclick="setExamId({{ exam.id }})">
 
                 Request Exam
-
             </button>
 
         {% endif %}
@@ -310,6 +311,52 @@ if (localStorage.getItem("darkMode") === "true") {
 <p>No exams available.</p>
 
 {% endif %}
+</div>
+
+<!--/** ================= REQUEST EXAM MODAL ================= **/-->
+<div class="modal fade" id="requestExamModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+
+      <form method="POST" action="{{ url_for('request_exam') }}">
+
+        <div class="modal-header">
+          <h5 class="modal-title">Request Exam Access</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+
+        <div class="modal-body">
+
+          <input type="hidden" name="exam_id" id="modal_exam_id">
+
+          <div class="mb-3">
+            <label class="form-label">Enter Access Code</label>
+            <input type="text"
+                   class="form-control"
+                   name="access_code"
+                   placeholder="Enter code given by instructor/admin"
+                   required>
+          </div>
+
+          <small class="text-muted">
+            Only approved codes will grant exam access.
+          </small>
+
+        </div>
+
+        <div class="modal-footer">
+          <button type="submit" class="btn btn-success">
+            Submit Request
+          </button>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+            Cancel
+          </button>
+        </div>
+
+      </form>
+
+    </div>
+  </div>
 </div>
 
 <!-- ================= SCRIPTS ================= -->
@@ -342,6 +389,7 @@ function createStartButton(examId) {
     a.textContent = "Start Exam";
     return a;
 }
+
 
 /* ================= SSE (REAL-TIME STREAM) ================= */
 const studentId = "{{ student.student_id if student else '' }}";
@@ -381,49 +429,13 @@ if (!studentId) {
 </script>
 
 <script>
-/* ================= REQUEST EXAM ================= */
-async function requestExam(examId) {
+function setExamId(examId) {
 
-    try {
+    document.getElementById(
+        "modal_exam_id"
+    ).value = examId;
 
-        const response = await fetch(`/request_exam/${examId}`, {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json"
-            }
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-
-            alert(data.message || "Request sent!");
-
-            const btn = document.querySelector(
-                `button[onclick="requestExam(${examId})"]`
-            );
-
-            if (btn) {
-                btn.classList.remove("btn-primary");
-                btn.classList.add("btn-warning");
-                btn.disabled = true;
-                btn.textContent = "Pending Approval";
-            }
-
-        } else {
-
-            alert(data.error || "Failed to request exam.");
-
-        }
-
-    } catch (err) {
-
-        console.error("Request error:", err);
-        alert("Server error while requesting exam.");
-
-    }
 }
 </script>
-
 </body>
 </html>
