@@ -6,7 +6,7 @@ from wtforms.validators import DataRequired, Optional
 from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask import get_flashed_messages
 from flask import Response, stream_with_context
 from flask_wtf.csrf import CSRFProtect
@@ -273,11 +273,16 @@ class ExamAttempt(db.Model):
 
     score = db.Column(db.Integer, default=0)
 
+    # Time when the student actually starts the exam
     started_at = db.Column(
         db.DateTime,
         default=datetime.utcnow
     )
 
+    # Time when the exam should automatically end
+    end_time = db.Column(db.DateTime)
+
+    # Time when the student submits
     submitted_at = db.Column(db.DateTime)
 
     tab_switches = db.Column(db.Integer, default=0)
@@ -1052,13 +1057,28 @@ def view_exams():
                 Student.student_id == ExamAccess.student_id
             )
             .filter(
-                ExamAccess.exam_id == exam.id
+                ExamAccess.exam_id == exam.id,
+                Student.subject_code == exam.subject.subject_code
             )
             .distinct()
             .all()
         )
 
         exam_students[exam.id] = students
+
+        print("\n==============================")
+        print(f"Exam ID: {exam.id}")
+        print(f"Exam Title: {exam.title}")
+        print(f"Exam Subject Code: {exam.subject.subject_code}")
+
+        for s in students:
+            print(
+                f"Student ID: {s.student_id} | "
+                f"Name: {s.name} | "
+                f"Subject Code: {s.subject_code}"
+            )
+
+        print("==============================\n")
 
     return render_template(
         'view_exams.html',
@@ -1500,11 +1520,18 @@ def start_exam(exam_id):
 
     # 6. Create attempt only if missing
     if not attempt:
+
+        now = datetime.utcnow()
+
         attempt = ExamAttempt(
             student_id=student_id,
-            exam_id=exam_id,
+            exam_id=exam.id,
+            started_at=now,
+            end_time=now + timedelta(minutes=exam.duration_minutes),
             is_submitted=False
+
         )
+
         db.session.add(attempt)
         db.session.commit()
 
@@ -1529,9 +1556,6 @@ def request_exam():
     exam_id = request.form.get("exam_id")
     access_code = request.form.get("access_code")
 
-    print("EXAM ID:", exam_id)
-    print("ACCESS CODE:", access_code)
-
     if not exam_id:
         flash("Exam ID missing.", "danger")
         return redirect(url_for("dashboard_student"))
@@ -1545,18 +1569,93 @@ def request_exam():
         flash("Exam not found.", "danger")
         return redirect(url_for("dashboard_student"))
 
+    print("EXAM ID:", exam_id)
+    print("ACCESS CODE:", access_code)
+    print("SESSION USER ID:", session["user_id"])
+    print("EXAM SUBJECT:", exam.subject.subject_code)
+
+    # ==============================
+    # Temporary FIND STUDENT
+    # ==============================
+
+    print("\n===== STUDENT RECORDS FOR THIS USER =====")
+
+    students = Student.query.filter(
+        Student.user_id == session["user_id"]
+    ).all()
+
+    for s in students:
+        print(
+            "Student ID:", s.student_id,
+            "| Subject:", s.subject,
+            "| Subject Code:", repr(s.subject_code)
+        )
+
+    print("========================================")
+
     # ==============================
     # FIND STUDENT
     # ==============================
-    student = Student.query.filter_by(
-        user_id=session["user_id"]
+    student = Student.query.filter(
+        Student.user_id == session["user_id"],
+        Student.subject_code == exam.subject.subject_code
     ).first()
+
+    print("REQUEST STUDENT")
+    if student is None:
+        print("NO MATCHING STUDENT FOUND")
+        print("SESSION USER ID:", session["user_id"])
+        print("EXAM SUBJECT:", exam.subject.subject_code)
+
+        print("------ STUDENT RECORDS ------")
+
+        students = Student.query.filter(
+            Student.user_id == session["user_id"]
+        ).all()
+
+        for s in students:
+            print(
+                s.student_id,
+                "|",
+                s.subject,
+                "|",
+                s.subject_code,
+                "| user_id:",
+                s.user_id
+            )
+
+        print("-----------------------------")
+
+        flash("You are not enrolled in this subject.", "danger")
+        return redirect(url_for("dashboard_student"))
+
+    print("Student ID:", student.student_id)
+    print("Subject Code:", student.subject_code)
+
+    print("REQUEST EXAM")
+    print("Exam ID:", exam.id)
+    print("Exam Subject:", exam.subject.subject_code)
 
     print("FOUND STUDENT:", student)
 
     if not student:
         flash("Student record not found.", "danger")
         return redirect(url_for("dashboard_student"))
+
+    # ==============================
+    # VALIDATE SUBJECT
+    # ==============================
+
+    if student.subject_code.strip() != exam.subject.subject_code.strip():
+
+        flash(
+            "This exam is not assigned to your subject.",
+            "danger"
+        )
+
+        return redirect(
+            url_for("dashboard_student")
+        )
 
     # ==============================
     # VALIDATE ACCESS CODE
@@ -1676,6 +1775,27 @@ def take_exam(exam_id, question_id):
         flash("Invalid or completed exam attempt.", "danger")
         return redirect(url_for('dashboard_student'))
 
+    # ============================
+    # Calculate remaining time
+    # ============================
+    if attempt.end_time:
+        remaining_seconds = int(
+            (attempt.end_time - datetime.utcnow()).total_seconds()
+        )
+    else:
+        remaining_seconds = 0
+
+    # Don't allow negative values
+    if remaining_seconds < 0:
+        remaining_seconds = 0
+
+    # Time is up
+    if remaining_seconds == 0:
+        return redirect(url_for(
+            "submit_exam",
+            exam_id=exam_id
+        ))
+
     exam = Exam.query.get_or_404(exam_id)
 
     questions = Question.query.filter_by(
@@ -1716,7 +1836,8 @@ def take_exam(exam_id, question_id):
         total=total_questions,
         progress=answer_progress,
         next_question=next_question,
-        prev_question=prev_question
+        prev_question=prev_question,
+        remaining_seconds=remaining_seconds
     )
 
 @app.route('/save-answer', methods=['POST'])
@@ -3098,6 +3219,18 @@ def upload_students():
                         section = safe_str(row.get('section')).strip()
                         subject = safe_str(row.get('subject')).strip().title()
 
+                        # Look up the subject information
+                        subject_record = Subject.query.filter_by(
+                            subject_name=subject
+                        ).first()
+
+                        subject_code = ""
+                        subject_name = subject
+
+                        if subject_record:
+                            subject_code = subject_record.subject_code
+                            subject_name = subject_record.subject_name
+
                         if not student_id or not subject:
                             msg = f"Row {row_num}: missing required field(s)."
                             errors.append(msg)
@@ -3118,6 +3251,8 @@ def upload_students():
                             'year': row.get('year'),
                             'school_year': row.get('school_year'),
                             'semester': row.get('semester'),
+                            'subject_code': subject_code,
+                            'subject_name': subject_name,
 
                             # Attendance
                             'midterm_attendance1': row.get('midterm_attendance1'),
@@ -3225,6 +3360,9 @@ def upload_students():
                                 'name': name.strip(),
                                 'section': section.strip(),
                                 'subject': subject.strip().title(),
+
+                                'subject_code': subject_code,
+                                'subject_name': subject_name,
 
                                 'year': safe_str(row.get('year')).strip(),
                                 'school_year': safe_str(row.get('school_year')).strip(),

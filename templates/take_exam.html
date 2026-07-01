@@ -25,7 +25,14 @@
 
     <!-- Timer -->
     <div class="alert alert-info text-center">
-        Time Left: <span id="timer">00:00</span>
+        Time Left:
+        <span id="timer"></span>
+
+        <input
+            type="hidden"
+            id="remainingSeconds"
+            value="{{ remaining_seconds }}"
+        >
     </div>
 
     <!-- Question -->
@@ -115,37 +122,67 @@
 
 </div>
 
+<!-- ========================================================= -->
+<!-- ⏱️ EXAM COUNTDOWN TIMER -->
+<!-- Controls the student's remaining exam time. -->
+<!-- Automatically submits the exam when the timer reaches zero. -->
+<!-- ========================================================= -->
 <script>
-let timeLeft = {{ time_left or 0 }};
+let timeLeft = {{ remaining_seconds }};
+let timerInterval = null;
 
 function updateTimer() {
-    let minutes = Math.floor(timeLeft / 60);
-    let seconds = timeLeft % 60;
+
+    if (timeLeft <= 0) {
+        document.getElementById("timer").innerText = "00:00";
+
+        clearInterval(timerInterval);
+
+        submitExam(true);
+        return;
+    }
+
+    const minutes = Math.floor(timeLeft / 60);
+    const seconds = timeLeft % 60;
 
     document.getElementById("timer").innerText =
-        `${minutes}:${seconds < 10 ? '0' : ''}${seconds}`;
-
-    if(timeLeft <= 0){
-        alert("Time is up!");
-        document.forms[0].submit();
-    }
+        `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
 
     timeLeft--;
 }
 
-setInterval(updateTimer, 1000);
+updateTimer();
+
+timerInterval = setInterval(updateTimer, 1000);
 </script>
+
+<!-- ========================================================= -->
+<!-- ✅ ANSWER SELECTION -->
+<!-- Stores the student's selected answer before submission. -->
+<!-- (Autosave will be added here later.) -->
+<!-- ========================================================= -->
 <script>
 function selectAnswer(value) {
     document.getElementById("selectedAnswer").value = value;
 }
 </script>
 
+<!-- ========================================================= -->
+<!-- 📤 EXAM SUBMISSION -->
+<!-- Manual submission asks for confirmation. -->
+<!-- Automatic submission (timer expires) skips confirmation. -->
+<!-- ========================================================= -->
 <script>
-function submitExam() {
-    if(confirm("Are you sure you want to submit your exam?")) {
-        window.location.href = "{{ url_for('submit_exam', exam_id=exam.id) }}";
+function submitExam(autoSubmit = false) {
+
+    if (!autoSubmit) {
+        if (!confirm("Are you sure you want to submit your exam?")) {
+            return;
+        }
     }
+
+    window.location.href =
+        "{{ url_for('submit_exam', exam_id=exam.id) }}";
 }
 </script>
 
