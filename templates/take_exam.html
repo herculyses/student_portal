@@ -35,6 +35,34 @@
 
         }
 
+        #questionNavigator {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            gap: 6px;
+        }
+
+        #questionNavigator button {
+            padding: 4px 0;
+            font-size: 12px;
+        }
+
+        .nav-pulse {
+            animation: pulse 0.35s ease;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+            }
+            50% {
+                transform: scale(1.12);
+                box-shadow: 0 0 10px rgba(13,110,253,0.4);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+
         /* ==========================================
            Save Status Toast
         ========================================== */
@@ -230,6 +258,8 @@
       <small>Progress</small>
       <small>{{ current_index }} / {{ total }}</small>
     </div>
+
+    <div id="examSummary" class="mb-2 small fw-bold text-muted"></div>
 
     <div class="progress">
       <div class="progress-bar"

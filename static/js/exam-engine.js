@@ -21,6 +21,9 @@
 
 const Exam = {
 
+    // Prevent multiple submissions
+    isSubmitting: false,
+
     // ========================================================
     // Initialize the Exam Engine
     // ========================================================
@@ -67,7 +70,14 @@ const Exam = {
 
                 clearInterval(this.timerInterval);
 
-                Exam.submit.finish(true);
+                // Prevent duplicate auto-submit
+                if (!Exam.isSubmitting) {
+
+                    Exam.isSubmitting = true;
+
+                    Exam.submit.finish(true);
+
+                }
 
                 return;
 
@@ -170,6 +180,11 @@ const Exam = {
 
             }
 
+            return {
+                question_id: document.getElementById("questionId").value,
+                answer: answer
+            };
+
         },
 
         // ----------------------------------------------
@@ -194,7 +209,9 @@ const Exam = {
             button.classList.add("btn-primary");
 
             // Save answer automatically
-            await this.save(answer);
+            const result = await this.save(answer);
+
+            Exam.navigator.updateSingle(result.question_id, true);
 
         },
 
@@ -244,10 +261,8 @@ const Exam = {
                 const reviewData =
                     await response.json();
 
-                this.render(
-                    reviewData,
-                    "questionNavigator"
-                );
+                this.render(reviewData, "questionNavigator");
+                this.updateSummary(reviewData);
 
             }
 
@@ -282,12 +297,10 @@ const Exam = {
                 html += `
 
                 <button
-                    class="btn btn-sm m-1 ${buttonClass} ${currentClass}"
-
+                    data-id="${item.question_id}"
+                    class="btn btn-sm m-100 ${buttonClass} ${currentClass}"
                     onclick="Exam.navigation.go('${item.url}')">
-
                     ${item.question_number}
-
                 </button>
 
                 `;
@@ -296,10 +309,74 @@ const Exam = {
 
             document.getElementById(containerId).innerHTML = html;
 
+        },
+
+        // ----------------------------------------------
+        // Live update single question status
+        // ----------------------------------------------
+
+        updateSingle(questionId, answered) {
+
+            const buttons =
+                document.querySelectorAll("#questionNavigator button");
+
+            buttons.forEach(btn => {
+
+                const match =
+                    btn.getAttribute("data-id") == questionId;
+
+                if (!match) return;
+
+                // Remove old state classes
+                btn.classList.remove("btn-outline-danger");
+                btn.classList.remove("btn-success");
+
+                btn.classList.add("nav-pulse");
+
+                setTimeout(() => {
+                    btn.classList.remove("nav-pulse");
+                }, 350);
+
+                // Apply new state
+                btn.classList.add(
+                    answered ? "btn-success" : "btn-outline-danger"
+                );
+
+            });
+
+        },
+
+        // ----------------------------------------------
+        // Update exam summary panel
+        // ----------------------------------------------
+
+        updateSummary(reviewData) {
+
+            let answered = 0;
+            let total = reviewData.length;
+
+            reviewData.forEach(item => {
+                if (item.answered) answered++;
+            });
+
+            let remaining = total - answered;
+            let percent = Math.round((answered / total) * 100);
+
+            const summary = `
+                Answered: ${answered} |
+                Remaining: ${remaining} |
+                Progress: ${percent}%
+            `;
+
+            const el = document.getElementById("examSummary");
+
+            if (el) {
+                el.innerHTML = summary;
+            }
+
         }
 
     },
-
 
     // ========================================================
     // Navigation Module
@@ -608,6 +685,14 @@ const Exam = {
     submit: {
 
         finish(auto = false) {
+
+            if (Exam.isSubmitting) {
+
+                return;
+
+            }
+
+            Exam.isSubmitting = true;
 
             if (!auto) {
 
