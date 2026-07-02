@@ -1819,6 +1819,12 @@ def take_exam(exam_id, question_id):
     prev_question = questions[current_index - 1] if current_index > 0 else None
     next_question = questions[current_index + 1] if current_index + 1 < len(questions) else None
 
+    # Get student's previously selected answer (if any)
+    saved_answer = StudentAnswer.query.filter_by(
+        attempt_id=attempt_id,
+        question_id=current_question.id
+    ).first()
+
     # 4. REAL progress (DB-based)
     answers_count = StudentAnswer.query.filter_by(
         attempt_id=attempt_id
@@ -1837,7 +1843,8 @@ def take_exam(exam_id, question_id):
         progress=answer_progress,
         next_question=next_question,
         prev_question=prev_question,
-        remaining_seconds=remaining_seconds
+        remaining_seconds=remaining_seconds,
+        saved_answer=saved_answer
     )
 
 @app.route('/save-answer', methods=['POST'])
@@ -1868,93 +1875,6 @@ def save_answer():
     db.session.commit()
 
     return jsonify({"status": "saved"})
-
-
-@app.route('/log-tab-switch', methods=['POST'])
-@login_required(role=['Admin', 'Instructor', 'Student'])
-def log_tab_switch():
-
-    attempt = ExamAttempt.query.get(session.get('attempt_id'))
-
-    if attempt:
-        attempt.tab_switches += 1
-        db.session.commit()
-
-    return {"status": "logged"}
-
-
-@app.route('/exam/<int:exam_id>/submit')
-@login_required(role=['Admin', 'Instructor', 'Student'])
-def submit_exam(exam_id):
-
-    student_id = session.get('student_id')
-
-    if not student_id:
-        flash("Session expired.", "danger")
-        return redirect(url_for('login'))
-
-    # 1. Get attempt safely
-    attempt = ExamAttempt.query.filter_by(
-        student_id=student_id,
-        exam_id=exam_id,
-        is_submitted=False
-    ).first()
-
-    if not attempt:
-        flash("No active attempt or already submitted.", "danger")
-        return redirect(url_for('dashboard_student'))
-
-    # 2. Prevent double submission immediately
-    if attempt.is_submitted:
-        flash("Exam already submitted.", "warning")
-        return redirect(url_for('dashboard_student'))
-
-    # 3. Load all answers in one go
-    answers = StudentAnswer.query.filter_by(attempt_id=attempt.id).all()
-
-    # 4. Load all questions once (avoid N+1 queries)
-    questions = {
-        q.id: q for q in Question.query.filter_by(exam_id=exam_id).all()
-    }
-
-    score = 0
-
-    # 5. Grade safely
-    for ans in answers:
-
-        question = questions.get(ans.question_id)
-
-        if not question:
-            continue
-
-        student_answer = (ans.selected_answer or "").strip().lower()
-        correct = (question.correct_answer or "").strip().lower()
-
-        if question.question_type == "identification":
-            is_correct = student_answer == correct
-        else:
-            is_correct = student_answer == correct
-
-        ans.is_correct = is_correct
-
-        if is_correct:
-            score += question.points
-
-    # 6. Finalize attempt
-    attempt.score = score
-    attempt.is_submitted = True
-    attempt.submitted_at = datetime.utcnow()
-
-    db.session.commit()
-
-    # 7. Clean session safely
-    session.pop('attempt_id', None)
-    session.pop('question_order', None)
-    session.pop('exam_end_time', None)
-
-    flash(f"Exam submitted successfully! Score: {score}", "success")
-
-    return redirect(url_for('dashboard_student'))
 
 @app.route('/exam/<int:exam_id>/answer', methods=['POST'])
 @login_required(role=['Admin', 'Instructor', 'Student'])
@@ -2042,6 +1962,91 @@ def submit_answer(exam_id):
     # 7. LAST QUESTION → GO TO SUBMIT PAGE
     flash("You reached the last question. Submit your exam.", "info")
     return redirect(url_for('review_exam', exam_id=exam_id))
+
+@app.route('/exam/<int:exam_id>/submit')
+@login_required(role=['Admin', 'Instructor', 'Student'])
+def submit_exam(exam_id):
+
+    student_id = session.get('student_id')
+
+    if not student_id:
+        flash("Session expired.", "danger")
+        return redirect(url_for('login'))
+
+    # 1. Get attempt safely
+    attempt = ExamAttempt.query.filter_by(
+        student_id=student_id,
+        exam_id=exam_id,
+        is_submitted=False
+    ).first()
+
+    if not attempt:
+        flash("No active attempt or already submitted.", "danger")
+        return redirect(url_for('dashboard_student'))
+
+    # 2. Prevent double submission immediately
+    if attempt.is_submitted:
+        flash("Exam already submitted.", "warning")
+        return redirect(url_for('dashboard_student'))
+
+    # 3. Load all answers in one go
+    answers = StudentAnswer.query.filter_by(attempt_id=attempt.id).all()
+
+    # 4. Load all questions once (avoid N+1 queries)
+    questions = {
+        q.id: q for q in Question.query.filter_by(exam_id=exam_id).all()
+    }
+
+    score = 0
+
+    # 5. Grade safely
+    for ans in answers:
+
+        question = questions.get(ans.question_id)
+
+        if not question:
+            continue
+
+        student_answer = (ans.selected_answer or "").strip().lower()
+        correct = (question.correct_answer or "").strip().lower()
+
+        if question.question_type == "identification":
+            is_correct = student_answer == correct
+        else:
+            is_correct = student_answer == correct
+
+        ans.is_correct = is_correct
+
+        if is_correct:
+            score += question.points
+
+    # 6. Finalize attempt
+    attempt.score = score
+    attempt.is_submitted = True
+    attempt.submitted_at = datetime.utcnow()
+
+    db.session.commit()
+
+    # 7. Clean session safely
+    session.pop('attempt_id', None)
+    session.pop('question_order', None)
+    session.pop('exam_end_time', None)
+
+    flash(f"Exam submitted successfully! Score: {score}", "success")
+
+    return redirect(url_for('dashboard_student'))
+
+@app.route('/log-tab-switch', methods=['POST'])
+@login_required(role=['Admin', 'Instructor', 'Student'])
+def log_tab_switch():
+
+    attempt = ExamAttempt.query.get(session.get('attempt_id'))
+
+    if attempt:
+        attempt.tab_switches += 1
+        db.session.commit()
+
+    return {"status": "logged"}
 
 # =========================================================
 # 6. 👨‍🏫 ADMIN EXAM CONTROL

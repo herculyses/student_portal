@@ -16,6 +16,26 @@
             text-align: left;
             margin-bottom: 10px;
         }
+
+        /* ==========================================
+           Question Card Animation
+        ========================================== */
+
+        #questionCard{
+
+            transition:
+                opacity .25s ease,
+                transform .25s ease;
+
+        }
+
+#questionCard.fade-out{
+
+    opacity:0;
+
+    transform:translateX(-40px);
+
+}
     </style>
 </head>
 
@@ -36,37 +56,57 @@
     </div>
 
     <!-- Question -->
-    <div class="card shadow-sm">
-
+    <div id="questionCard" class="card shadow-sm">
         <div class="card-body">
 
             <h5>
                 {{ question.question_text }}
             </h5>
 
+            <div id="saveStatus"
+                 class="text-success small fw-bold"
+                 style="display:none;">
+
+                ✓ Answer Saved
+
+            </div>
+
 <form method="POST" action="{{ url_for('submit_answer', exam_id=exam.id) }}">
 
-    <input type="hidden" name="question_id" value="{{ question.id }}">
-    <input type="hidden" name="answer" id="selectedAnswer">
+    <input type="hidden"
+           id="questionId"
+           value="{{ question.id }}">
+    <input type="hidden"
+           name="answer"
+           id="selectedAnswer"
+           value="{{ saved_answer.selected_answer if saved_answer else '' }}">
 
-    <button type="button" onclick="selectAnswer('A')" class="btn btn-outline-primary option-btn">
+    <button type="button"
+            class="btn btn-outline-primary option-btn"
+            data-answer="A"
+            onclick="selectAnswer('A', this)">
         A. {{ question.choice_a }}
     </button>
 
-    <button type="button" onclick="selectAnswer('B')" class="btn btn-outline-primary option-btn">
+    <button type="button"
+            class="btn btn-outline-primary option-btn"
+            data-answer="B"
+            onclick="selectAnswer('B', this)">
         B. {{ question.choice_b }}
     </button>
 
-    <button type="button" onclick="selectAnswer('C')" class="btn btn-outline-primary option-btn">
+    <button type="button"
+            class="btn btn-outline-primary option-btn"
+            data-answer="C"
+            onclick="selectAnswer('C', this)">
         C. {{ question.choice_c }}
     </button>
 
-    <button type="button" onclick="selectAnswer('D')" class="btn btn-outline-primary option-btn">
+    <button type="button"
+            class="btn btn-outline-primary option-btn"
+            data-answer="D"
+            onclick="selectAnswer('D', this)">
         D. {{ question.choice_d }}
-    </button>
-
-    <button type="submit" class="btn btn-success w-100 mt-3">
-        Submit Answer
     </button>
 
 </form>
@@ -80,19 +120,29 @@
 <div class="d-flex justify-content-between mt-4">
 
     {% if prev_question %}
-    <a href="{{ url_for('take_exam', exam_id=exam.id, question_id=prev_question.id) }}"
-       class="btn btn-secondary">
+    <button
+        class="btn btn-secondary"
+        onclick="navigateQuestion('{{ url_for('take_exam',
+            exam_id=exam.id,
+            question_id=prev_question.id) }}')">
+
         ⬅ Previous
-    </a>
+
+    </button>
     {% else %}
     <div></div>
     {% endif %}
 
     {% if next_question %}
-    <a href="{{ url_for('take_exam', exam_id=exam.id, question_id=next_question.id) }}"
-       class="btn btn-primary">
+    <button
+        class="btn btn-primary"
+        onclick="navigateQuestion('{{ url_for('take_exam',
+            exam_id=exam.id,
+            question_id=next_question.id) }}')">
+
         Next ➡
-    </a>
+
+    </button>
     {% else %}
     <button class="btn btn-success" onclick="submitExam()">
         Finish Exam
@@ -123,67 +173,233 @@
 </div>
 
 <!-- ========================================================= -->
-<!-- ⏱️ EXAM COUNTDOWN TIMER -->
-<!-- Controls the student's remaining exam time. -->
-<!-- Automatically submits the exam when the timer reaches zero. -->
+<!-- 📝 EXAM CONTROLLER -->
+<!-- Handles all client-side exam functions:
+     • Countdown Timer
+     • Answer Selection
+     • Automatic Answer Saving
+     • Restore Previous Answers
+     • Exam Submission
+
+     Future Features:
+     • Question Transition Animation
+     • Question Navigator
+     • Review Answers Modal
+     • Keyboard Shortcuts
+     • Anti-Cheat Protection
+-->
 <!-- ========================================================= -->
 <script>
+
+// =========================================================
+// ⏱️ EXAM COUNTDOWN TIMER
+// =========================================================
+
 let timeLeft = {{ remaining_seconds }};
 let timerInterval = null;
 
 function updateTimer() {
 
     if (timeLeft <= 0) {
+
         document.getElementById("timer").innerText = "00:00";
 
         clearInterval(timerInterval);
 
         submitExam(true);
+
         return;
+
     }
 
     const minutes = Math.floor(timeLeft / 60);
     const seconds = timeLeft % 60;
 
     document.getElementById("timer").innerText =
-        `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        `${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
 
     timeLeft--;
+
 }
 
 updateTimer();
 
 timerInterval = setInterval(updateTimer, 1000);
-</script>
 
-<!-- ========================================================= -->
-<!-- ✅ ANSWER SELECTION -->
-<!-- Stores the student's selected answer before submission. -->
-<!-- (Autosave will be added here later.) -->
-<!-- ========================================================= -->
-<script>
-function selectAnswer(value) {
-    document.getElementById("selectedAnswer").value = value;
+
+// =========================================================
+// 💾 SAVE ANSWER TO DATABASE
+// Called automatically whenever a student selects an answer.
+// =========================================================
+
+async function saveAnswer(answer) {
+
+    try {
+
+        const response = await fetch("/save-answer", {
+
+            method: "POST",
+
+            headers: {
+                "Content-Type": "application/json"
+            },
+
+            body: JSON.stringify({
+
+                question_id:
+                    document.getElementById("questionId").value,
+
+                answer: answer
+
+            })
+
+        });
+
+        if (!response.ok) {
+
+            console.error("Unable to save answer.");
+
+        }
+
+        document.getElementById("saveStatus").style.display = "block";
+
+        setTimeout(() => {
+
+            document.getElementById("saveStatus").style.display = "none";
+
+        }, 1200);
+
+    }
+    catch (error) {
+
+        console.error(error);
+
+    }
+
 }
-</script>
 
-<!-- ========================================================= -->
-<!-- 📤 EXAM SUBMISSION -->
-<!-- Manual submission asks for confirmation. -->
-<!-- Automatic submission (timer expires) skips confirmation. -->
-<!-- ========================================================= -->
-<script>
+
+// =========================================================
+// ✅ ANSWER SELECTION
+// Highlights the student's selected answer and immediately
+// saves it into the database.
+// =========================================================
+
+async function selectAnswer(answer, button) {
+
+    // Store selected answer locally
+    document.getElementById("selectedAnswer").value = answer;
+
+    // Remove previous highlight
+    document.querySelectorAll(".option-btn").forEach(btn => {
+
+        btn.classList.remove("btn-primary");
+
+        btn.classList.add("btn-outline-primary");
+
+    });
+
+    // Highlight current answer
+    button.classList.remove("btn-outline-primary");
+
+    button.classList.add("btn-primary");
+
+    // Save answer automatically
+    await saveAnswer(answer);
+
+}
+
+
+// =========================================================
+// 🔄 RESTORE PREVIOUSLY SAVED ANSWER
+// Executes every time a question page is opened.
+// =========================================================
+
+window.onload = function () {
+
+    const savedAnswer =
+        document.getElementById("selectedAnswer").value;
+
+    if (!savedAnswer) return;
+
+    document.querySelectorAll(".option-btn").forEach(btn => {
+
+        if (btn.dataset.answer === savedAnswer) {
+
+            btn.classList.remove("btn-outline-primary");
+
+            btn.classList.add("btn-primary");
+
+        }
+
+    });
+
+};
+
+// =========================================================
+// 🚀 SMOOTH QUESTION NAVIGATION
+// Adds a short slide/fade animation before
+// moving to another question.
+// =========================================================
+
+function navigateQuestion(url){
+
+    const card =
+        document.getElementById("questionCard");
+
+    card.classList.add("fade-out");
+
+    setTimeout(function(){
+
+        window.location.href = url;
+
+    },250);
+
+}
+
+// =========================================================
+// 📤 SUBMIT EXAM
+// Manual submission asks confirmation.
+// Automatic submission skips confirmation.
+// =========================================================
+
 function submitExam(autoSubmit = false) {
 
     if (!autoSubmit) {
+
         if (!confirm("Are you sure you want to submit your exam?")) {
+
             return;
+
         }
+
     }
 
     window.location.href =
         "{{ url_for('submit_exam', exam_id=exam.id) }}";
+
 }
+
+
+// =========================================================
+// 🚧 UPCOMING FEATURES
+// (Reserved for Exam System Version 2)
+// =========================================================
+//
+// 1. Smooth Question Transition
+//
+// 2. Question Navigator
+//
+// 3. Review Answers Modal
+//
+// 4. Keyboard Shortcuts
+//
+// 5. Auto Save Before Navigation
+//
+// 6. Anti-Cheat Enhancements
+//
+// =========================================================
+
 </script>
 
 </body>
