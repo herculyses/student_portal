@@ -2036,6 +2036,84 @@ def submit_exam(exam_id):
 
     return redirect(url_for('dashboard_student'))
 
+# ==========================================================
+# REVIEW MODULE
+# ==========================================================
+
+@app.route('/review-answers/<int:exam_id>')
+@login_required(role=['Admin', 'Instructor', 'Student'])
+def review_answers(exam_id):
+
+    student_id = session.get("student_id")
+    attempt_id = session.get("attempt_id")
+
+    if not student_id or not attempt_id:
+        return jsonify([])
+
+    # ==========================================================
+    # Load all questions in this exam
+    # ==========================================================
+
+    questions = Question.query.filter_by(
+        exam_id=exam_id
+    ).order_by(Question.id.asc()).all()
+
+    # ==========================================================
+    # Load student's saved answers
+    # ==========================================================
+
+    answers = StudentAnswer.query.filter_by(
+        attempt_id=attempt_id
+    ).all()
+
+    # ==========================================================
+    # Build review data
+    # ==========================================================
+
+    review_data = []
+
+    answer_lookup = {
+        answer.question_id: answer
+        for answer in answers
+    }
+
+    # ==========================================================
+    # Build one review item per question
+    # ==========================================================
+
+    for index, question in enumerate(questions, start=1):
+
+        saved_answer = answer_lookup.get(question.id)
+
+        review_data.append({
+
+            "question_number": index,
+
+            "question_id": question.id,
+
+            "answered": saved_answer is not None,
+
+            "selected_answer":
+                saved_answer.selected_answer if saved_answer else "",
+
+            "url": url_for(
+                "take_exam",
+                exam_id=exam_id,
+                question_id=question.id
+            )
+
+        })
+
+    # ==========================================================
+    # Return review data as JSON
+    # ==========================================================
+
+    return jsonify(review_data)
+
+# ==========================================================
+# SECURITY MODULE
+# ==========================================================
+
 @app.route('/log-tab-switch', methods=['POST'])
 @login_required(role=['Admin', 'Instructor', 'Student'])
 def log_tab_switch():
