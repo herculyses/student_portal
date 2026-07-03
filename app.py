@@ -285,7 +285,17 @@ class ExamAttempt(db.Model):
     # Time when the student submits
     submitted_at = db.Column(db.DateTime)
 
-    tab_switches = db.Column(db.Integer, default=0)
+    # ======================================================
+    # Exam Security Summary
+    # ======================================================
+
+    security_score = db.Column(db.Integer, default=100)
+
+    total_violations = db.Column(db.Integer, default=0)
+
+    last_violation = db.Column(db.DateTime)
+
+    last_violation_type = db.Column(db.String(50))
 
     is_submitted = db.Column(db.Boolean, default=False)
 
@@ -294,6 +304,44 @@ class ExamAttempt(db.Model):
         backref='attempt',
         lazy=True,
         cascade="all, delete"
+    )
+
+class SecurityEvent(db.Model):
+    __tablename__ = "security_events"
+
+    # ======================================================
+    # Identity
+    # ======================================================
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    attempt_id = db.Column(db.Integer, db.ForeignKey("exam_attempts.id"), nullable=False)
+
+    # ======================================================
+    # Security Event Information
+    # ======================================================
+
+    event_type = db.Column(db.String(50), nullable=False)
+
+    description = db.Column(db.String(255))
+
+    severity = db.Column(db.String(20), default="LOW")
+
+    penalty = db.Column(db.Integer, default=0)
+
+    source = db.Column(db.String(30))
+
+    details = db.Column(db.String(255))
+
+    occurred_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    # ======================================================
+    # Relationship
+    # ======================================================
+
+    attempt = db.relationship(
+        "ExamAttempt",
+        backref="security_events"
     )
 
 class ExamAccess(db.Model):
@@ -639,9 +687,91 @@ def login_required(role=None):
         return decorated_function
     return decorator
 
-# --- Routes ---
+# ==========================================================
+# SECURITY EVENT DEFINITIONS
+# ==========================================================
 
+SECURITY_EVENTS = {
+
+    "TAB_SWITCH": {
+        "penalty": 5,
+        "severity": "HIGH",
+        "source": "Window",
+        "description": "Student switched to another browser tab."
+    },
+
+    "FULLSCREEN_EXIT": {
+        "penalty": 10,
+        "severity": "CRITICAL",
+        "source": "Window",
+        "description": "Student exited fullscreen mode."
+    },
+
+    "RIGHT_CLICK": {
+        "penalty": 1,
+        "severity": "LOW",
+        "source": "Mouse",
+        "description": "Student attempted to open the context menu."
+    },
+
+    "COPY": {
+        "penalty": 2,
+        "severity": "MEDIUM",
+        "source": "Clipboard",
+        "description": "Student attempted to copy exam content."
+    },
+
+    "CUT": {
+        "penalty": 2,
+        "severity": "MEDIUM",
+        "source": "Clipboard",
+        "description": "Student attempted to cut exam content."
+    },
+
+    "PASTE": {
+        "penalty": 2,
+        "severity": "MEDIUM",
+        "source": "Clipboard",
+        "description": "Student attempted to paste content."
+    },
+
+    "F12": {
+        "penalty": 3,
+        "severity": "HIGH",
+        "source": "Keyboard",
+        "description": "Student attempted to open Developer Tools using F12."
+    },
+
+    "CTRL_U": {
+        "penalty": 5,
+        "severity": "HIGH",
+        "source": "Keyboard",
+        "description": "Student attempted to view the page source using Ctrl+U."
+    },
+
+    "CTRL_SHIFT_I": {
+        "penalty": 5,
+        "severity": "HIGH",
+        "source": "Keyboard",
+        "description": "Student attempted to open Developer Tools using Ctrl+Shift+I."
+    },
+
+    "TEXT_SELECTION": {
+        "penalty": 2,
+        "severity": "LOW",
+        "source": "Mouse",
+        "description": "Student attempted to select exam text."
+    }
+
+}
+
+# ==========================================================
+# --- ROUTES ---
+# ==========================================================
+
+# ==========================================================
 # Login
+# ==========================================================
 @app.route('/', methods=['GET', 'POST'])
 def login():
     form = LoginForm()
@@ -2114,17 +2244,84 @@ def review_answers(exam_id):
 # SECURITY MODULE
 # ==========================================================
 
-@app.route('/log-tab-switch', methods=['POST'])
+@app.route('/log-security-event', methods=['POST'])
 @login_required(role=['Admin', 'Instructor', 'Student'])
-def log_tab_switch():
+def log_security_event():
 
     attempt = ExamAttempt.query.get(session.get('attempt_id'))
 
-    if attempt:
-        attempt.tab_switches += 1
-        db.session.commit()
+    if not attempt:
+        return jsonify({
+            "success": False
+        }), 404
 
-    return {"status": "logged"}
+    data = request.get_json()
+
+    event = data.get("event")
+
+    config = SECURITY_EVENTS.get(event)
+
+    # ----------------------------------------------------------
+    # Look up the event configuration
+    # ----------------------------------------------------------
+
+    config = SECURITY_EVENTS.get(event)
+
+    if not config:
+
+        return jsonify({
+            "success": False,
+            "message": "Unknown security event."
+        }), 400
+
+
+    # ----------------------------------------------------------
+    # Save the security event
+    # ----------------------------------------------------------
+
+    security_event = SecurityEvent(
+
+        attempt_id=attempt.id,
+
+        event_type=event,
+
+        description=config["description"],
+
+        severity=config["severity"],
+
+        penalty=config["penalty"],
+
+        source=config["source"]
+
+    )
+
+    db.session.add(security_event)
+
+
+    # ----------------------------------------------------------
+    # Update the exam security summary
+    # ----------------------------------------------------------
+
+    attempt.security_score -= config["penalty"]
+    attempt.total_violations += 1
+    attempt.last_violation = datetime.utcnow()
+    attempt.last_violation_type = event
+
+    if attempt.security_score < 0:
+        attempt.security_score = 0
+
+    db.session.commit()
+
+#    force_submit = attempt.tab_switches >= 20
+    force_submit = False
+
+    return jsonify({
+
+        "success": True,
+        "force_submit": force_submit,
+        "security_score": attempt.security_score
+
+    })
 
 # =========================================================
 # 6. 👨‍🏫 ADMIN EXAM CONTROL

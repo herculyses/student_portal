@@ -21,6 +21,32 @@
 
 const Exam = {
 
+    startFullscreen(event, el) {
+
+        event.preventDefault();
+
+        const go = async () => {
+
+            try {
+
+                // Request fullscreen (must be user-triggered)
+                if (document.documentElement.requestFullscreen) {
+                    await document.documentElement.requestFullscreen();
+                }
+
+            } catch (err) {
+                console.warn("Fullscreen request failed:", err);
+            }
+
+            // Continue to exam after fullscreen attempt
+            window.location.href = el.href;
+        };
+
+        go();
+
+        return false;
+    },
+
     // Prevent multiple submissions
     isSubmitting: false,
 
@@ -37,6 +63,8 @@ const Exam = {
         this.answers.restore();
 
         this.navigator.load();
+
+        this.security.init();
 
     },
 
@@ -646,6 +674,251 @@ const Exam = {
             }
 
             Exam.navigation.go(url);
+
+        }
+
+    },
+
+    // ========================================================
+    // Exam Security Module
+    // ========================================================
+
+    security: {
+
+        selectionLock: false,
+
+        init() {
+
+            document.addEventListener(
+                "visibilitychange",
+                this.handleVisibilityChange
+            );
+
+            document.addEventListener(
+                "contextmenu",
+                this.handleRightClick
+            );
+
+            document.addEventListener(
+                "copy",
+                this.handleCopy
+            );
+
+            document.addEventListener(
+                "cut",
+                this.handleCut
+            );
+
+            document.addEventListener(
+                "paste",
+                this.handlePaste
+            );
+
+            document.addEventListener(
+                "keydown",
+                this.handleKeyDown
+            );
+
+            document.addEventListener(
+                "selectionchange",
+                this.handleTextSelection
+            );
+
+            document.addEventListener(
+                "fullscreenchange",
+                this.handleFullscreenChange
+            );
+
+        },
+
+        handleVisibilityChange() {
+
+            if (document.hidden) {
+
+                Exam.security.logEvent("TAB_SWITCH");
+
+            }
+
+        },
+
+        handleRightClick(event) {
+
+            event.preventDefault();
+
+            console.log("Right click blocked.");
+
+            Exam.security.logEvent("RIGHT_CLICK");
+
+        },
+
+        handleCopy(event) {
+
+            event.preventDefault();
+
+            console.log("Copy blocked.");
+
+            Exam.security.logEvent("COPY");
+
+        },
+
+        handleCut(event) {
+
+            event.preventDefault();
+
+            console.log("Cut blocked.");
+
+            Exam.security.logEvent("CUT");
+
+        },
+
+        handlePaste(event) {
+
+            event.preventDefault();
+
+            console.log("Paste blocked.");
+
+            Exam.security.logEvent("PASTE");
+
+        },
+
+        handleKeyDown(event) {
+
+            // ----------------------------------------------------
+            // F12
+            // ----------------------------------------------------
+
+            if (event.key === "F12") {
+
+                console.log("F12 detected.");
+
+                Exam.security.logEvent("F12");
+
+            }
+
+            // ----------------------------------------------------
+            // Ctrl + U
+            // ----------------------------------------------------
+
+            if (event.ctrlKey && event.key.toLowerCase() === "u") {
+
+                event.preventDefault();
+
+                console.log("Ctrl + U detected.");
+
+                Exam.security.logEvent("CTRL_U");
+
+            }
+
+            // ----------------------------------------------------
+            // Ctrl + Shift + I
+            // ----------------------------------------------------
+
+            if (
+                event.ctrlKey &&
+                event.shiftKey &&
+                event.key.toLowerCase() === "i"
+            ) {
+
+                event.preventDefault();
+
+                console.log("Ctrl + Shift + I detected.");
+
+                Exam.security.logEvent("CTRL_SHIFT_I");
+
+            }
+
+        },
+
+        handleTextSelection() {
+
+            const selectedText = window.getSelection().toString().trim();
+
+            if (!selectedText) {
+        return;
+            }
+
+            if (Exam.security.selectionLock) {
+                return;
+            }
+
+            Exam.security.selectionLock = true;
+
+            console.log("Text selection detected.");
+
+            Exam.security.logEvent("TEXT_SELECTION");
+
+            window.getSelection().removeAllRanges();
+
+            setTimeout(() => {
+
+                Exam.security.selectionLock = false;
+
+            }, 1000);
+
+        },
+
+        handleFullscreenChange() {
+
+            console.log("Fullscreen Changed");
+
+            // If still in fullscreen, do nothing.
+            if (document.fullscreenElement) {
+                return;
+            }
+
+            console.log("Fullscreen exited.");
+
+            Exam.security.logEvent("FULLSCREEN_EXIT");
+
+        },
+
+        // LOG EVENT HERE
+
+        async logEvent(eventType) {
+
+            try {
+
+                const response = await fetch("/log-security-event", {
+
+                    method: "POST",
+
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+
+                    body: JSON.stringify({
+                        event: eventType
+                    })
+
+                });
+
+                if (!response.ok) {
+
+                    console.error("Unable to log security event.");
+
+                    return;
+
+                }
+
+                const data = await response.json();
+
+                console.log(data);
+
+                if (data.force_submit) {
+
+                    alert("Too many security violations.\nYour exam will now be submitted.");
+
+                    Exam.submit.finish(true);
+
+                }
+
+            }
+
+            catch(error){
+
+                console.error(error);
+
+            }
 
         }
 

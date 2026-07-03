@@ -274,10 +274,9 @@ if (localStorage.getItem("darkMode") === "true") {
         {% if exam.status == "approved" %}
 
             <a href="{{ url_for('start_exam', exam_id=exam.id) }}"
-               class="btn btn-success">
-
+               class="btn btn-success"
+               onclick="return Exam.startFullscreen(event, this)">
                 Start Exam
-
             </a>
 
         {% elif exam.status == "pending" %}
