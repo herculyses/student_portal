@@ -615,8 +615,24 @@ class QuestionForm(FlaskForm):
 
     submit = SubmitField('Add Question')
 
+# ==========================================================
+# --- Utility and Helper Functions ---
+# ==========================================================
+def request_exam_response(is_ajax, success, message, category="info"):
 
-# --- Utility Functions ---
+    if is_ajax:
+
+        status_code = 200 if success else 400
+
+        return jsonify({
+            "success": success,
+            "message": message
+        }), status_code
+
+    flash(message, category)
+
+    return redirect(url_for("dashboard_student"))
+
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
 
@@ -953,7 +969,12 @@ def dashboard_student():
             "id": exam.id,
             "title": exam.title,
             "subject": exam.subject,
-            "status": access.status if access else None
+            "status": access.status if access else None,
+            "description": exam.description,
+            "duration": exam.duration_minutes,
+            "exam_type": exam.exam_type,
+            "term": exam.term,
+            "question_count": len(exam.questions)
         })
 
     return render_template(
@@ -1680,6 +1701,8 @@ def request_exam():
 
     print("===== REQUEST EXAM ROUTE HIT =====")
 
+    is_ajax = request.headers.get("X-Requested-With") == "XMLHttpRequest"
+
     # ==============================
     # GET FORM DATA
     # ==============================
@@ -1687,6 +1710,13 @@ def request_exam():
     access_code = request.form.get("access_code")
 
     if not exam_id:
+
+        if is_ajax:
+            return jsonify({
+                "success": False,
+                "message": "Exam ID missing."
+            }), 400
+
         flash("Exam ID missing.", "danger")
         return redirect(url_for("dashboard_student"))
 
@@ -1696,8 +1726,13 @@ def request_exam():
     exam = Exam.query.get(int(exam_id))
 
     if not exam:
-        flash("Exam not found.", "danger")
-        return redirect(url_for("dashboard_student"))
+
+        return request_exam_response(
+            is_ajax,
+            False,
+            "Exam not found.",
+            "danger"
+        )
 
     print("EXAM ID:", exam_id)
     print("ACCESS CODE:", access_code)
@@ -1769,8 +1804,13 @@ def request_exam():
     print("FOUND STUDENT:", student)
 
     if not student:
-        flash("Student record not found.", "danger")
-        return redirect(url_for("dashboard_student"))
+
+        return request_exam_response(
+            is_ajax,
+            False,
+            "Student record not found.",
+            "danger"
+        )
 
     # ==============================
     # VALIDATE SUBJECT
@@ -1778,13 +1818,11 @@ def request_exam():
 
     if student.subject_code.strip() != exam.subject.subject_code.strip():
 
-        flash(
+        return request_exam_response(
+            is_ajax,
+            False,
             "This exam is not assigned to your subject.",
             "danger"
-        )
-
-        return redirect(
-            url_for("dashboard_student")
         )
 
     # ==============================
@@ -1798,13 +1836,11 @@ def request_exam():
 
         if access_code.strip() != exam.access_code.strip():
 
-            flash(
+            return request_exam_response(
+                is_ajax,
+                False,
                 "Invalid access code.",
                 "danger"
-            )
-
-            return redirect(
-                url_for("dashboard_student")
             )
 
     # ==============================
@@ -1821,24 +1857,20 @@ def request_exam():
 
         if existing.status == "approved":
 
-            flash(
+            return request_exam_response(
+                is_ajax,
+                False,
                 "You already have access to this exam.",
                 "info"
             )
 
-            return redirect(
-                url_for("dashboard_student")
-            )
-
         if existing.status == "pending":
 
-            flash(
+            return request_exam_response(
+                is_ajax,
+                False,
                 "Your request is still pending approval.",
                 "warning"
-            )
-
-            return redirect(
-                url_for("dashboard_student")
             )
 
     # ==============================
@@ -1874,13 +1906,11 @@ def request_exam():
 
     print("SSE EVENT ADDED")
 
-    flash(
-        "Exam access granted successfully.",
+    return request_exam_response(
+        is_ajax,
+        True,
+        "Exam request submitted successfully.",
         "success"
-    )
-
-    return redirect(
-        url_for("dashboard_student")
     )
 
 @app.route('/exam/<int:exam_id>/take/<int:question_id>')
@@ -2497,6 +2527,39 @@ def delete_exam(exam_id):
         )
 
     return redirect(url_for('view_exams'))
+
+@app.route('/student-exam-status')
+@login_required(role=['Student'])
+def student_exam_status():
+
+    student_id = session.get('student_id')
+
+    accesses = ExamAccess.query.filter_by(
+        student_id=student_id
+    ).all()
+
+    result = []
+
+    for access in accesses:
+
+        exam = Exam.query.get(access.exam_id)
+
+        result.append({
+            "exam_id": access.exam_id,
+            "status": access.status,
+
+            "title": exam.title if exam else "",
+            "subject": exam.subject.subject_code if exam and exam.subject else "N/A",
+            "description": exam.description if exam else "",
+            "duration": exam.duration_minutes if exam else 0,
+            "exam_type": exam.exam_type if exam else "",
+            "term": exam.term if exam else "",
+            "question_count": len(exam.questions) if exam else 0,
+
+            "start_url": url_for("start_exam", exam_id=access.exam_id)
+        })
+
+    return jsonify(result)
 
 # =========================
 # SSE ROUTE
