@@ -1169,7 +1169,9 @@ def create_exam():
 
     return redirect(url_for('add_question', exam_id=exam.id))
 
-
+# =========================================================
+# 👁️👁️ VIEW EXAMS and EXAM MONITORING CENTER
+# =========================================================
 @app.route('/view-exams')
 @login_required(role=['Admin', 'Instructor'])
 def view_exams():
@@ -2185,9 +2187,18 @@ def submit_exam(exam_id):
     attempt.is_submitted = True
     attempt.submitted_at = datetime.utcnow()
 
+    # 7. Mark exam access as completed
+    access = ExamAccess.query.filter_by(
+        student_id=student_id,
+        exam_id=exam_id
+    ).first()
+
+    if access:
+        access.status = "completed"
+
     db.session.commit()
 
-    # 7. Clean session safely
+    # 8. Clean session safely
     session.pop('attempt_id', None)
     session.pop('question_order', None)
     session.pop('exam_end_time', None)
@@ -2557,6 +2568,45 @@ def student_exam_status():
             "question_count": len(exam.questions) if exam else 0,
 
             "start_url": url_for("start_exam", exam_id=access.exam_id)
+        })
+
+    return jsonify(result)
+
+@app.route('/student-dashboard-data')
+@login_required(role=['Student'])
+def student_dashboard_data():
+
+    student_id = session.get("student_id")
+
+    accesses = ExamAccess.query.filter_by(
+        student_id=student_id
+    ).all()
+
+    result = []
+
+    for access in accesses:
+
+        exam = Exam.query.get(access.exam_id)
+
+        if not exam:
+            continue
+
+        result.append({
+
+            "exam_id": exam.id,
+            "title": exam.title,
+            "description": exam.description,
+            "duration": exam.duration_minutes,
+            "question_count": len(exam.questions),
+            "exam_type": exam.exam_type,
+            "term": exam.term,
+            "subject": exam.subject.subject_code if exam.subject else "",
+            "status": access.status,
+            "start_url": url_for(
+                "start_exam",
+                exam_id=exam.id
+            )
+
         })
 
     return jsonify(result)

@@ -109,6 +109,24 @@ if (localStorage.getItem("darkMode") === "true") {
     animation: fadePulse 0.6s ease;
 }
 
+.waiting-transition {
+    animation: waitingFade 0.4s ease;
+}
+
+@keyframes waitingFade {
+
+    from {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+}
+
 @keyframes fadePulse {
     0% {
         opacity: 0.3;
@@ -122,6 +140,38 @@ if (localStorage.getItem("darkMode") === "true") {
         opacity: 1;
         transform: scale(1);
     }
+}
+
+.approved-highlight {
+    animation: approvedGlow 5s ease;
+}
+
+@keyframes approvedGlow {
+
+    0% {
+        box-shadow: 0 0 0 rgba(13,110,253,0);
+        transform: scale(1);
+    }
+
+    15% {
+        box-shadow: 0 0 30px rgba(13,110,253,.75);
+        transform: scale(1.02);
+    }
+
+    50% {
+        box-shadow: 0 0 26px rgba(13,110,253,.70);
+        transform: scale(1.02);
+    }
+
+    85% {
+        box-shadow: 0 0 18px rgba(13,110,253,.45);
+    }
+
+    100% {
+        box-shadow: 0 0 0 rgba(13,110,253,0);
+        transform: scale(1);
+    }
+
 }
 
 </style>
@@ -291,7 +341,7 @@ if (localStorage.getItem("darkMode") === "true") {
 
 {% for exam in allowed_exams %}
 
-<div id="req-{{ student.student_id }}-{{ exam.id }}"
+<div id="req-{{ exam.id }}"
      class="list-group-item exam-card d-flex justify-content-between align-items-center">
 
     <div>
@@ -589,354 +639,39 @@ if (localStorage.getItem("darkMode") === "true") {
 
 </div>
 
-<!-- ================= SCRIPTS ================= -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</div>
 
-<script>
-/* ================= DARK MODE ================= */
-function toggleDarkMode() {
-    document.body.classList.toggle("dark-mode");
-    localStorage.setItem(
-        "darkMode",
-        document.body.classList.contains("dark-mode")
-    );
-}
+<!-- ================= TOAST ================= -->
 
-/* ================= FLASH AUTO REMOVE ================= */
-document.querySelectorAll(".flash").forEach(flash => {
-    setTimeout(() => {
-        flash.style.transition = "0.5s";
-        flash.style.opacity = "0";
-        setTimeout(() => flash.remove(), 500);
-    }, 4000);
-});
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
 
-/* ✅ PUT IT HERE (RIGHT BEFORE SSE OR ANYWHERE ABOVE ITS USE) */
-function createStartButton(examId) {
-    const a = document.createElement("a");
-    a.className = "btn btn-success";
-    a.href = `/start_exam/${examId}`;
-    a.textContent = "Start Exam";
-    return a;
-}
+    <div id="liveToast"
+         class="toast align-items-center text-bg-success border-0"
+         role="alert">
 
-/* ================= Exam Information ================= */
+        <div class="d-flex">
 
-function showExamInfo(button){
+            <div class="toast-body" id="toastMessage">
+                Success
+            </div>
 
-    document.getElementById("modalExamTitle").textContent =
-        button.dataset.title;
-
-    document.getElementById("modalSubject").textContent =
-        button.dataset.subject;
-
-    document.getElementById("modalExamType").textContent =
-        button.dataset.examType;
-
-    document.getElementById("modalTerm").textContent =
-        button.dataset.term;
-
-    document.getElementById("modalDuration").textContent =
-        button.dataset.duration + " Minutes";
-
-    document.getElementById("modalQuestions").textContent =
-        button.dataset.questionCount + " Questions";
-
-    document.getElementById("modalDescription").textContent =
-        button.dataset.description || "No description available.";
-
-    document.getElementById("startExamButton").href =
-        button.dataset.startUrl;
-
-    document.getElementById("examAcknowledgement").checked = false;
-
-    document.getElementById("startExamButton")
-            .classList.add("disabled");
-
-    document.getElementById("startExamButton")
-            .setAttribute("aria-disabled", "true");
-
-}
-
-/* ================= Acknowledgement Checkbox ================= */
-
-document.addEventListener("DOMContentLoaded", function () {
-
-    const checkbox = document.getElementById("examAcknowledgement");
-    const startButton = document.getElementById("startExamButton");
-
-    checkbox.addEventListener("change", function () {
-
-        if (this.checked) {
-
-            startButton.classList.remove("disabled");
-            startButton.removeAttribute("aria-disabled");
-
-        } else {
-
-            startButton.classList.add("disabled");
-            startButton.setAttribute("aria-disabled", "true");
-
-        }
-
-    });
-
-});
-
-/* ================= Update Exam Action v1 ================= */
-
-function updateExamCard(exam) {
-
-    const examId = exam.exam_id;
-
-    const card = document.getElementById(`req-${exam.exam_id}-${exam.exam_id}`);
-    if (card) {
-        card.classList.remove("exam-update");
-        void card.offsetWidth; // restart animation
-        card.classList.add("exam-update");
-    }
-
-    const statusBox = document.getElementById(`exam-status-${examId}`);
-    const actionBox = document.getElementById(`exam-action-${examId}`);
-
-    if (!statusBox || !actionBox) return;
-
-    console.log("Updating Exam:", examId, exam.status);
-
-    // ================= STATUS =================
-    if (exam.status === "approved") {
-
-        statusBox.innerHTML = `
-            <span class="badge bg-success">
-                🟢 Ready
-            </span>
-        `;
-
-        actionBox.innerHTML = `
             <button
                 type="button"
-                class="btn btn-success"
-                data-bs-toggle="modal"
-                data-bs-target="#examInfoModal"
-
-                data-title="${exam.title}"
-                data-subject="${exam.subject}"
-                data-description="${exam.description}"
-                data-duration="${exam.duration}"
-                data-question-count="${exam.question_count}"
-                data-exam-type="${exam.exam_type}"
-                data-term="${exam.term}"
-                data-start-url="${exam.start_url}"
-
-                onclick="showExamInfo(this)">
-                Start Examination
+                class="btn-close btn-close-white me-2 m-auto"
+                data-bs-dismiss="toast">
             </button>
-        `;
 
-    }
+        </div>
 
-    else if (exam.status === "pending") {
+    </div>
 
-        statusBox.innerHTML = `
-            <span class="badge bg-warning text-dark">
-                🟡 Pending Approval
-            </span>
-        `;
+</div>
 
-        actionBox.innerHTML = `
-            <button class="btn btn-warning" disabled>
-                Pending Approval
-            </button>
-        `;
+<!-- ================= START SCRIPTS ================= -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>window.studentId = "{{ student.student_id if student else '' }}";</script>
+<script src="{{ url_for('static', filename='js/student-dashboard.js') }}"></script>
+<!-- ================= END SCRIPTS ================= -->
 
-    }
-
-    else {
-
-        statusBox.innerHTML = `
-            <span class="badge bg-secondary">
-                ⚪ Not Requested
-            </span>
-        `;
-
-        actionBox.innerHTML = `
-            <button class="btn btn-primary"
-                    data-bs-toggle="modal"
-                    data-bs-target="#requestExamModal"
-                    onclick="setExamId(${examId})">
-                Request Exam
-            </button>
-        `;
-
-    }
-}
-
-/* ================= LIVE EXAM STATUS ================= */
-
-setInterval(function () {
-
-    fetch("/student-exam-status")
-        .then(response => response.json())
-        .then(data => {
-
-            console.log("LIVE STATUS:", data);
-
-            data.forEach(function(exam){
-
-                updateExamCard(exam);
-
-            });
-
-        })
-        .catch(error => {
-
-            console.error("Status Check Error:", error);
-
-        });
-
-}, 5000);
-
-
-/* ================= SSE (REAL-TIME STREAM) ================= */
-const studentId = "{{ student.student_id if student else '' }}";
-
-if (!studentId) {
-    console.warn("No student ID for SSE - stream disabled");
-} else {
-
-    const studentStream = new EventSource(`/stream/${studentId}`);
-
-    studentStream.addEventListener("request_sent", function (e) {
-        const data = JSON.parse(e.data);
-
-        alert("Request sent! Waiting for approval...");
-        console.log("Request sent:", data);
-    });
-
-    studentStream.addEventListener("approved", function (e) {
-        const data = JSON.parse(e.data);
-
-        alert("Your exam request has been approved! You can now start the exam.");
-        console.log("Approved:", data);
-
-        const row = document.querySelector(
-            `#req-${data.student_id}-${data.exam_id}`
-        );
-
-        row
-          ?.querySelector(".request-btn")
-          ?.replaceWith(createStartButton(data.exam_id));
-    });
-
-    studentStream.onerror = function () {
-        console.log("SSE disconnected or error");
-    };
-
-}
-</script>
-
-<script>
-
-let selectedExamId = null;
-
-function setExamId(examId) {
-
-    selectedExamId = examId;
-
-    document.getElementById("modal_exam_id").value = examId;
-}
-
-function showSendingState() {
-
-    if (!selectedExamId) return;
-
-    const btn = document.getElementById(`request-btn-${selectedExamId}`);
-
-    if (!btn) return;
-
-    btn.disabled = true;
-
-    btn.innerHTML = `
-        <span class="spinner-border spinner-border-sm me-2"></span>
-        Sending...
-    `;
-
-    const modal = bootstrap.Modal.getInstance(
-        document.getElementById("requestExamModal")
-    );
-
-    if (modal) {
-        modal.hide();
-    }
-    }
-
-/* ================= UPDATE EXAM ACTION v2 ================= */
-
-function updateExamAction(examId, status) {
-
-    const action = document.getElementById(`exam-action-${examId}`);
-
-    if (!action) return;
-
-    if (status === "pending") {
-
-        action.innerHTML = `
-            <button class="btn btn-warning" disabled>
-                Pending Approval
-            </button>
-        `;
-
-        action.classList.add("exam-update");
-
-        setTimeout(() => {
-            action.classList.remove("exam-update");
-        }, 600);
-
-    }
-
-}
-
-/* ================= REQUEST EXAM (MISSION 2.2) ================= */
-
-document.addEventListener("DOMContentLoaded", function () {
-
-    const form = document.getElementById("requestExamForm");
-
-    form.addEventListener("submit", function (event) {
-
-        event.preventDefault();
-
-        showSendingState();
-
-        fetch(form.action, {
-            method: "POST",
-            body: new FormData(form),
-            headers: {
-                "X-Requested-With": "XMLHttpRequest"
-            }
-        })
-        .then(response => response.json())
-        .then(data => {
-
-            console.log("SERVER RESPONSE:", data);
-
-            if (data.success) {
-
-                updateExamAction(selectedExamId, "pending");
-
-            }
-
-        })
-        .catch(error => {
-
-            console.error("Fetch Error:", error);
-
-        });
-
-    });
-
-});
-
-</script>
 </body>
 </html>
