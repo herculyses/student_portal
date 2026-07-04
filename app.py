@@ -1901,10 +1901,15 @@ def request_exam():
         "data": {
             "access_id": request_access.id,
             "student_id": str(student.student_id).strip(),
+            "student_name": student.name,
             "exam_id": exam.id,
             "status": request_access.status
         }
     })
+
+    print("===== ADMIN SSE QUEUE =====")
+    print(sse_events["admin"])
+    print("===========================")
 
     print("SSE EVENT ADDED")
 
@@ -2421,7 +2426,15 @@ def approve_request(access_id):
         }
     })
 
-    return redirect(url_for('view_exams'))
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({
+            "success": True,
+            "student_id": access.student_id,
+            "exam_id": access.exam_id,
+            "status": "approved"
+        })
+
+    return redirect(url_for("view_exams"))
 
 @app.route('/start-exam/<int:exam_id>', methods=['POST'])
 @login_required(role=['Instructor', 'Admin'])
@@ -2625,6 +2638,8 @@ def stream(user_id):
             if user_id in sse_events and sse_events[user_id]:
 
                 event = sse_events[user_id].pop(0)
+
+                print(f"➡ Sending to {user_id}: {event}")
 
                 yield f"event: {event['event']}\n"
                 yield f"data: {json.dumps(event['data'])}\n\n"

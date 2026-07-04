@@ -177,7 +177,7 @@ if (localStorage.getItem("darkMode") === "true") {
                         </tr>
                     </thead>
 
-                    <tbody>
+                    <tbody id="exam-body-{{ exam.id }}">
 
                     {% for student in exam_students[exam.id] %}
 
@@ -567,8 +567,148 @@ function addToQueue(data) {
 
     } else {
 
-        console.log("❌ Student row not found.");
+        console.log("Creating new student row...");
 
+        const tableBody = document.getElementById(
+            `exam-body-${data.exam_id}`
+        );
+
+        if (!tableBody) {
+            console.log("❌ Exam table not found.");
+            return;
+        }
+
+        const row = document.createElement("tr");
+
+        row.innerHTML = `
+            <td class="text-center">
+                ${data.student_id}
+            </td>
+
+            <td>
+                ${data.student_name}
+            </td>
+
+            <td id="status-${data.student_id}-${data.exam_id}"
+                class="text-center">
+
+                <span class="badge bg-warning text-dark">
+                    Pending
+                </span>
+
+            </td>
+
+            <td id="action-${data.student_id}-${data.exam_id}"
+                class="text-center">
+
+                <button class="btn btn-success btn-sm"
+                        onclick="approveRequest(${data.access_id})">
+
+                    Approve
+
+                </button>
+
+            </td>
+        `;
+
+        tableBody.appendChild(row);
+
+        console.log("✅ Student row added.");
+
+    }
+
+}
+
+// ============================================
+// =========👇 Update Student Access==========
+// ============================================
+function updateStudentAccess(studentId, examId, status) {
+
+    const statusBox = document.getElementById(
+        `status-${studentId}-${examId}`
+    );
+
+    const actionBox = document.getElementById(
+        `action-${studentId}-${examId}`
+    );
+
+    if (!statusBox || !actionBox) return;
+
+    console.log(`Updating Student ${studentId}, Exam ${examId} → ${status}`);
+
+    // ================= APPROVED =================
+    if (status === "approved") {
+
+        statusBox.innerHTML = `
+            <span class="badge bg-success">
+                Approved
+            </span>
+        `;
+
+        actionBox.innerHTML = `
+            <button class="btn btn-secondary btn-sm" disabled>
+                Approved
+            </button>
+        `;
+
+        statusBox.classList.add("approved-highlight");
+
+        setTimeout(() => {
+            statusBox.classList.remove("approved-highlight");
+        }, 3000);
+    }
+
+    // ================= REJECTED =================
+    else if (status === "rejected") {
+
+        statusBox.innerHTML = `
+            <span class="badge bg-danger">
+                Rejected
+            </span>
+        `;
+
+        actionBox.innerHTML = `
+            <button class="btn btn-warning btn-sm"
+                    onclick="reRequest(${studentId}, ${examId})">
+                Re-request
+            </button>
+        `;
+
+        statusBox.classList.add("approved-highlight");
+
+        setTimeout(() => {
+            statusBox.classList.remove("approved-highlight");
+        }, 3000);
+    }
+
+    // ================= PENDING =================
+    else if (status === "pending") {
+
+        statusBox.innerHTML = `
+            <span class="badge bg-warning text-dark">
+                Pending
+            </span>
+        `;
+
+        actionBox.innerHTML = `
+            <button class="btn btn-secondary btn-sm" disabled>
+                Waiting...
+            </button>
+        `;
+    }
+
+    // ================= DEFAULT (NO REQUEST) =================
+    else {
+
+        statusBox.innerHTML = `
+            <span class="badge bg-secondary">
+                No Request
+            </span>
+        `;
+
+        actionBox.innerHTML = `
+            <span class="text-muted">—</span>
+        `;
     }
 }
 
