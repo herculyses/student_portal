@@ -254,3 +254,24 @@ html.dark-mode .navbar {
     background-color: #7a5a00 !important;
     color: #fff !important;
 }
+
+/* ================= MOBILE LAYOUT ================= */
+
+@media (max-width: 768px) {
+
+    .sidebar {
+        position: relative;
+        width: 100%;
+        height: auto;
+    }
+
+    .main-content {
+        margin-left: 0;
+        width: 100%;
+    }
+
+    .d-flex {
+        flex-direction: column;
+    }
+
+}
