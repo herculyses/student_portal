@@ -219,12 +219,13 @@ if (localStorage.getItem("darkMode") === "true") {
 
                                 {% if access and access.status == "pending" %}
 
-                                    <a href="{{ url_for('approve_request', access_id=access.id) }}"
-                                       class="btn btn-success btn-sm">
+                                    <button
+                                        class="btn btn-success btn-sm"
+                                        onclick="approveRequest({{ access.id }})">
 
                                         Approve
 
-                                    </a>
+                                    </button>
 
                                 {% elif access and access.status == "approved" %}
 
@@ -521,6 +522,22 @@ adminStream.addEventListener("new_request", function (e) {
     addToQueue(data);
 });
 
+adminStream.addEventListener("live_update", function (e) {
+
+    console.log("🔥 LIVE UPDATE EVENT RECEIVED");
+
+    const data = JSON.parse(e.data);
+
+    console.log("✅ LIVE UPDATE:", data);
+
+    updateStudentAccess(
+        data.student_id,
+        data.exam_id,
+        data.status
+    );
+
+});
+
 function addToQueue(data) {
 
     console.log("SSE DATA:", data);
@@ -578,6 +595,9 @@ function addToQueue(data) {
             return;
         }
 
+        console.log("TABLE BODY:", tableBody);
+        console.log("ROWS BEFORE:", tableBody.rows.length);
+
         const row = document.createElement("tr");
 
         row.innerHTML = `
@@ -612,6 +632,8 @@ function addToQueue(data) {
         `;
 
         tableBody.appendChild(row);
+
+        console.log("ROWS AFTER:", tableBody.rows.length);
 
         console.log("✅ Student row added.");
 
@@ -720,9 +742,6 @@ function approveRequest(accessId) {
     .then(response => {
 
         console.log("APPROVE RESPONSE:", response);
-
-        // force refresh after approval
-        window.location.reload();
 
     })
     .catch(error => {

@@ -1911,6 +1911,8 @@ def request_exam():
     print(sse_events["admin"])
     print("===========================")
 
+    print("ADMIN QUEUE LENGTH:", len(sse_events["admin"]))
+
     print("SSE EVENT ADDED")
 
     return request_exam_response(
@@ -2406,6 +2408,7 @@ def approve_request(access_id):
     access.status = "approved"
     db.session.commit()
 
+    print("🔥 SENDING LIVE UPDATE TO ADMIN")
     # 🔥 SEND UPDATE TO ADMIN STREAM
     sse_events["admin"].append({
         "event": "live_update",
@@ -2640,6 +2643,7 @@ def stream(user_id):
                 event = sse_events[user_id].pop(0)
 
                 print(f"➡ Sending to {user_id}: {event}")
+                print("QUEUE LENGTH AFTER POP:", len(sse_events[user_id]))
 
                 yield f"event: {event['event']}\n"
                 yield f"data: {json.dumps(event['data'])}\n\n"

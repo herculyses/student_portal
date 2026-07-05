@@ -296,6 +296,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
         showSendingState();
 
+        console.log("🚀 Sending request to:", form.action);
+
         fetch(form.action, {
 
             method: "POST",
