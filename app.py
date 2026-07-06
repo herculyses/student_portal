@@ -4121,7 +4121,12 @@ if __name__ == '__main__':
     ENV = os.environ.get('FLASK_ENV', 'development')
 
     if ENV == 'development':
-        app.run(debug=True, threaded=True)
+        app.run(
+            host="0.0.0.0",
+            port=5000,
+            debug=True,
+            threaded=True
+        )
     else:
         from waitress import serve
         serve(app, host='0.0.0.0', port=5000)
