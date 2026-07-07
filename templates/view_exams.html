@@ -59,43 +59,30 @@ if (localStorage.getItem("darkMode") === "true") {
 }
 </style>
 </head>
-
 <body class="bg-light">
-
 <div class="container py-4">
-
     <!-- HEADER -->
     <div class="d-flex justify-content-between align-items-center mb-4">
-
         <h2>
             <i class="bi bi-file-earmark-text"></i> View Exams
         </h2>
-
         <div class="d-flex gap-2">
-
             <!-- CREATE EXAM -->
             <button type="button"
                     class="btn btn-primary"
                     data-bs-toggle="modal"
                     data-bs-target="#createExamModal">
-
                 <i class="bi bi-plus-circle"></i> Create Exam
             </button>
-
             <!-- BACK -->
             <a href="{{ url_for('dashboard_admin') }}" class="btn btn-secondary">
                 <i class="bi bi-arrow-left"></i> Back
             </a>
-
         </div>
-
     </div>
-
     {% for exam in exams %}
-
     <div class="card shadow-sm mb-4">
         <div class="card-body">
-
             <!-- EXAM HEADER -->
             <div class="d-flex justify-content-between align-items-start mb-3">
                 <div>
@@ -103,7 +90,6 @@ if (localStorage.getItem("darkMode") === "true") {
                     <p class="text-muted mb-1">
                         {{ exam.subject.subject_code }} - {{ exam.subject.subject_name }}
                     </p>
-
                     <small class="text-muted">
                         <strong>Term:</strong> {{ exam.term or "No Term" }} |
                         <strong>Type:</strong> {{ exam.exam_type or "No Type" }} |
@@ -115,7 +101,6 @@ if (localStorage.getItem("darkMode") === "true") {
                         <strong>Duration:</strong> {{ exam.duration_minutes }} mins
                     </small>
                 </div>
-
                 <div>
                     {% if exam.is_active %}
                         <span class="badge bg-success">Active</span>
@@ -124,34 +109,27 @@ if (localStorage.getItem("darkMode") === "true") {
                     {% endif %}
                 </div>
             </div>
-
             <!-- ACTIONS -->
             <div class="d-flex flex-wrap gap-2 mb-3">
-
                 <a href="{{ url_for('edit_exam', exam_id=exam.id) }}"
                    class="btn btn-primary btn-sm">
                     <i class="bi bi-pencil"></i> Edit
                 </a>
-
                 <a href="{{ url_for('add_question', exam_id=exam.id) }}"
                    class="btn btn-success btn-sm">
                     <i class="bi bi-plus-circle"></i> Add Questions
                 </a>
-
                 <form method="POST" action="{{ url_for('admin_start_exam', exam_id=exam.id) }}">
                     <button class="btn btn-warning btn-sm">
                         <i class="bi bi-play-circle"></i> Start
                     </button>
                 </form>
-
                 <form method="POST" action="{{ url_for('end_exam', exam_id=exam.id) }}">
                     <button class="btn btn-danger btn-sm">
                         <i class="bi bi-stop-circle"></i> End
                     </button>
                 </form>
-
             </div>
-
             <!-- DELETE -->
             <div class="delete-zone">
                 <button class="btn btn-outline-danger btn-sm"
@@ -161,137 +139,167 @@ if (localStorage.getItem("darkMode") === "true") {
                     <i class="bi bi-trash"></i> Delete Exam
                 </button>
             </div>
-
             <!-- ============================= -->
             <!-- STUDENTS TABLE -->
             <!-- ============================= -->
-
             <div class="table-responsive mt-4">
                 <table class="table table-bordered table-hover align-middle">
                     <thead class="table-light text-center">
                         <tr>
                             <th>Student ID</th>
                             <th>Student Name</th>
-                            <th>Access Status</th>
+                            <th>Section</th>
+                            <th>Score</th>
+                            <th>Result</th>
+                            <th>Submitted</th>
+                            <th>Status</th>
                             <th>Action</th>
                         </tr>
                     </thead>
-
                     <tbody id="exam-body-{{ exam.id }}">
-
                     {% for student in exam_students[exam.id] %}
-
                         {% set access = access_map.get((student.student_id, exam.id)) %}
-
                         <tr>
-
-                            <td class="text-center">
-                                {{ student.student_id }}
+                            <td class="text-center">{{ student.student_id }}</td>
+                            <td>{{ student.name }}</td>
+                            <td id="section-{{ student.student_id }}-{{ exam.id }}">
+                                {{ student.section }}
                             </td>
+                            <td id="score-{{ student.student_id }}-{{ exam.id }}">
 
-                            <td>
-                                {{ student.name }}
-                            </td>
+                            {% set score = score_map.get((student.student_id, exam.id)) %}
 
-                            <td id="status-{{ student.student_id }}-{{ exam.id }}" class="text-center">
+                            {% if score and score.score is not none %}
 
-                                {% if access %}
+                                {% if score.percentage >= 85 %}
 
-                                    {% if access.status == "approved" %}
-                                        <span class="badge bg-success">Approved</span>
+                                    <span class="fw-bold text-success">
+                                        {{ score.score }} / {{ score.total }}
+                                        ({{ score.percentage }}%)
+                                    </span>
 
-                                    {% elif access.status == "pending" %}
-                                        <span class="badge bg-warning text-dark">Pending</span>
+                                {% elif score.percentage >= 70 %}
 
-                                    {% elif access.status == "completed" %}
-                                        <span class="badge bg-primary">Completed</span>
-
-                                    {% elif access.status == "rejected" %}
-                                        <span class="badge bg-danger">Rejected</span>
-
-                                    {% elif access.status == "forced_submit" %}
-                                        <span class="badge bg-dark">Force Submitted</span>
-
-                                    {% elif access.status == "not_requested" %}
-                                        <span class="badge bg-secondary">No Request</span>
-
-                                    {% endif %}
+                                    <span class="fw-bold text-warning">
+                                        {{ score.score }} / {{ score.total }}
+                                        ({{ score.percentage }}%)
+                                    </span>
 
                                 {% else %}
 
-                                    <span class="badge bg-secondary">
-                                        No Request
+                                    <span class="fw-bold text-danger">
+                                        {{ score.score }} / {{ score.total }}
+                                        ({{ score.percentage }}%)
                                     </span>
 
                                 {% endif %}
 
+                            {% else %}
+
+                                <span class="text-muted">—</span>
+
+                            {% endif %}
+
                             </td>
+                            <td id="result-{{ student.student_id }}-{{ exam.id }}">
+                            {% if score and score.percentage is not none %}
+                                {% if score.percentage >= 85 %}
+                                    <span class="badge bg-success">
+                                        Excellent
+                                    </span>
+                                {% elif score.percentage >= 70 %}
+                                    <span class="badge bg-warning text-dark">
+                                        Passed
+                                    </span>
+                                {% else %}
+                                    <span class="badge bg-danger">
+                                        Failed
+                                    </span>
+                                {% endif %}
+                            {% else %}
+                                —
+                            {% endif %}
+                            </td>
+                            <td id="submitted-{{ student.student_id }}-{{ exam.id }}">
 
+                            {% if score and score.submitted_at %}
+
+                                {{ score.submitted_at.strftime("%b %d, %Y") }}
+                                <br>
+                                <small class="text-muted">
+                                    {{ score.submitted_at.strftime("%I:%M %p") }}
+                                </small>
+
+                            {% else %}
+
+                                <span class="text-muted">—</span>
+
+                            {% endif %}
+
+                            </td>
+                            <td id="status-{{ student.student_id }}-{{ exam.id }}" class="text-center">
+                                {% if access %}
+                                    {% if access.status == "approved" %}
+                                        <span class="badge bg-success">Approved</span>
+                                    {% elif access.status == "pending" %}
+                                        <span class="badge bg-warning text-dark">Pending</span>
+                                    {% elif access.status == "completed" %}
+                                        <span class="badge bg-primary">Completed</span>
+                                    {% elif access.status == "rejected" %}
+                                        <span class="badge bg-danger">Rejected</span>
+                                    {% elif access.status == "forced_submit" %}
+                                        <span class="badge bg-dark">Force Submitted</span>
+                                    {% elif access.status == "not_requested" %}
+                                        <span class="badge bg-secondary">No Request</span>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="badge bg-secondary">
+                                        No Request
+                                    </span>
+                                {% endif %}
+                            </td>
                             <td id="action-{{ student.student_id }}-{{ exam.id }}" class="text-center">
-
                                 {% if access and access.status == "pending" %}
-
                                     <div class="d-flex justify-content-center gap-2">
-
                                         <button
                                             class="btn btn-success btn-sm"
                                             onclick="approveRequest({{ access.id }})">
-
                                             Approve
-
                                         </button>
-
                                         <button
                                             class="btn btn-outline-danger btn-sm"
                                             onclick="recycleExam(
                                                 {{ exam.id }},
                                                 '{{ student.student_id }}'
                                             )">
-
                                             Cancel
-
                                         </button>
-
                                     </div>
-
                                 {% elif access and access.status in ["approved", "completed", "rejected", "forced_submit"] %}
-
                                     <button
                                         class="btn btn-outline-warning btn-sm"
                                         onclick="recycleExam(
                                             {{ exam.id }},
                                             '{{ student.student_id }}'
                                         )">
-
                                         ♻ Reset
-
                                     </button>
-
                                 {% else %}
-
                                     <span class="text-muted">—</span>
-
                                 {% endif %}
-
                             </td>
-
                         </tr>
-
                     {% endfor %}
-
                     </tbody>
                 </table>
             </div>
 
         </div>
     </div>
-
     {% else %}
         <div class="alert alert-info">No exams found.</div>
     {% endfor %}
-
 </div>
-
 <!-- DELETE MODAL -->
 <div class="modal fade" id="deleteModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
@@ -319,7 +327,6 @@ if (localStorage.getItem("darkMode") === "true") {
     </div>
   </div>
 </div>
-
 <!-- CREATE EXAM MODAL -->
 <div class="modal fade" id="createExamModal" tabindex="-1">
   <div class="modal-dialog">
@@ -563,6 +570,8 @@ adminStream.addEventListener("live_update", function (e) {
     const data = JSON.parse(e.data);
 
     console.log("✅ LIVE UPDATE:", data);
+    console.table(data);
+    console.log(JSON.stringify(data, null, 2));
 
     updateStudentAccess(
         data.student_id,
@@ -570,8 +579,14 @@ adminStream.addEventListener("live_update", function (e) {
         data.status
     );
 
+    // Update row details instantly
+    updateStudentRow(data);
+
 });
 
+// ============================================
+// =========👇Adds Row to Queue==========
+// ============================================
 function addToQueue(data) {
 
     console.log("SSE DATA:", data);
@@ -648,6 +663,22 @@ function addToQueue(data) {
 
             <td>
                 ${data.student_name}
+            </td>
+
+            <td id="section-${data.student_id}-${data.exam_id}">
+                ${data.section || "—"}
+            </td>
+
+            <td id="score-${data.student_id}-${data.exam_id}">
+                <span class="text-muted">—</span>
+            </td>
+
+            <td id="result-${data.student_id}-${data.exam_id}">
+                —
+            </td>
+
+            <td id="submitted-${data.student_id}-${data.exam_id}">
+                <span class="text-muted">—</span>
             </td>
 
             <td id="status-${data.student_id}-${data.exam_id}"
@@ -824,6 +855,133 @@ function updateStudentAccess(studentId, examId, status) {
     }
 }
 
+// ============================================
+// =========👇 Updates Student Row==========
+// ============================================
+function updateStudentRow(data) {
+
+    console.log("🟢 updateStudentRow()", data);
+
+    const sectionBox = document.getElementById(
+        `section-${data.student_id}-${data.exam_id}`
+    );
+
+    const scoreBox = document.getElementById(
+        `score-${data.student_id}-${data.exam_id}`
+    );
+
+    const resultBox = document.getElementById(
+        `result-${data.student_id}-${data.exam_id}`
+    );
+
+    const submittedBox = document.getElementById(
+        `submitted-${data.student_id}-${data.exam_id}`
+    );
+
+    if (!sectionBox || !scoreBox || !resultBox || !submittedBox) {
+        return;
+    }
+
+    // =========================
+    // Section
+    // =========================
+    if (data.section) {
+        sectionBox.textContent = data.section;
+    }
+
+    // =========================
+    // Score
+    // =========================
+    if (data.score != null && data.total_points != null) {
+
+        const percentage = Math.round(
+            (data.score / data.total_points) * 100
+        );
+
+        let scoreColor = "text-danger";
+
+        if (percentage >= 85) {
+            scoreColor = "text-success";
+        }
+        else if (percentage >= 70) {
+            scoreColor = "text-warning";
+        }
+
+        scoreBox.innerHTML = `
+            <span class="fw-bold ${scoreColor}">
+                ${data.score} / ${data.total_points}
+                (${percentage}%)
+            </span>
+        `;
+
+        // =========================
+        // Result
+        // =========================
+
+        if (percentage >= 85) {
+
+            resultBox.innerHTML = `
+                <span class="badge bg-success">
+                    Excellent
+                </span>
+            `;
+
+        }
+        else if (percentage >= 70) {
+
+            resultBox.innerHTML = `
+                <span class="badge bg-warning text-dark">
+                    Passed
+                </span>
+            `;
+
+        }
+        else {
+
+            resultBox.innerHTML = `
+                <span class="badge bg-danger">
+                    Failed
+                </span>
+            `;
+
+        }
+
+    }
+
+    // =========================
+    // Submitted
+    // =========================
+
+    if (data.submitted_at) {
+
+        const date = new Date(data.submitted_at);
+
+        const formattedDate = date.toLocaleDateString("en-US", {
+            month: "short",
+            day: "2-digit",
+            year: "numeric"
+        });
+
+        const formattedTime = date.toLocaleTimeString("en-US", {
+            hour: "2-digit",
+            minute: "2-digit"
+        });
+
+        submittedBox.innerHTML = `
+            ${formattedDate}
+            <br>
+            <small class="text-muted">
+                ${formattedTime}
+            </small>
+        `;
+
+    }
+
+}
+
+// ============================================
+// =======👇 Updates Approve Request========
+// ============================================
 function approveRequest(accessId) {
 
     fetch(`/approve-request/${accessId}`, {

@@ -1211,6 +1211,7 @@ def view_exams():
     }
 
     exam_students = {}
+    score_map = {}
 
     for exam in exams:
 
@@ -1231,6 +1232,43 @@ def view_exams():
 
         exam_students[exam.id] = students
 
+        # ===========================
+        # BUILD SCORE MAP
+        # ===========================
+        total_points = sum(
+            question.points
+            for question in exam.questions
+        )
+
+        for student in students:
+
+            attempt = (
+                ExamAttempt.query
+                .filter_by(
+                    student_id=student.student_id,
+                    exam_id=exam.id,
+                    is_submitted=True
+                )
+                .order_by(ExamAttempt.id.desc())
+                .first()
+            )
+
+            score_map[(student.student_id, exam.id)] = {
+                "attempt": attempt,
+                "score": attempt.score if attempt else None,
+                "total": total_points,
+                "percentage": (
+                    round((attempt.score / total_points) * 100)
+                    if attempt and total_points > 0
+                    else None
+                ),
+                "submitted_at": (
+                    attempt.submitted_at + timedelta(hours=8)
+                    if attempt and attempt.submitted_at
+                    else None
+                )
+            }
+
         print("\n==============================")
         print(f"Exam ID: {exam.id}")
         print(f"Exam Title: {exam.title}")
@@ -1250,6 +1288,7 @@ def view_exams():
         exams=exams,
         exam_students=exam_students,
         access_map=access_map,
+        score_map=score_map,
         subjects=subjects
     )
 
@@ -1911,10 +1950,17 @@ def request_exam():
                 "event": "new_request",
                 "data": {
                     "access_id": existing.id,
+
                     "student_id": str(student.student_id).strip(),
                     "student_name": student.name,
+                    "section": student.section,
+
                     "exam_id": exam.id,
-                    "status": existing.status
+                    "status": "pending",
+
+                    "score": None,
+                    "total_points": None,
+                    "submitted_at": None
                 }
             })
 
@@ -1950,10 +1996,17 @@ def request_exam():
         "event": "new_request",
         "data": {
             "access_id": request_access.id,
+
             "student_id": str(student.student_id).strip(),
             "student_name": student.name,
+            "section": student.section,
+
             "exam_id": exam.id,
-            "status": request_access.status
+            "status": "pending",
+
+            "score": None,
+            "total_points": None,
+            "submitted_at": None
         }
     })
 
@@ -2264,6 +2317,10 @@ def submit_exam(exam_id):
         flash("Exam already submitted.", "warning")
         return redirect(url_for('dashboard_student'))
 
+        print("===== SENDING LIVE UPDATE =====")
+        print(sse_events.get("admin"))
+        print("===============================")
+
     # 3. Load all answers in one go
     answers = StudentAnswer.query.filter_by(attempt_id=attempt.id).all()
 
@@ -2322,9 +2379,24 @@ def submit_exam(exam_id):
         sse_events["admin"].append({
             "event": "live_update",
             "data": {
+                "access_id": access.id,
+
                 "student_id": access.student_id,
+                "student_name": access.student.name,
+                "section": access.student.section,
                 "exam_id": access.exam_id,
-                "status": "completed"
+
+                "status": "completed",
+
+                "score": score,
+
+                "total_points": sum(
+                    q.points for q in Question.query.filter_by(exam_id=exam_id).all()
+                ),
+
+                "submitted_at": (
+                    attempt.submitted_at + timedelta(hours=8)
+                ).strftime("%Y-%m-%d %I:%M %p")
             }
         })
 
@@ -2336,6 +2408,10 @@ def submit_exam(exam_id):
     flash(f"Exam submitted successfully! Score: {score}", "success")
 
     return redirect(url_for('dashboard_student'))
+
+    print("===== SENDING LIVE UPDATE =====")
+    print(sse_events.get("admin"))
+    print("===============================")
 
 # ==========================================================
 # REVIEW MODULE
@@ -4262,7 +4338,7 @@ if __name__ == '__main__':
         if not User.query.filter_by(username='admin').first():
             db.session.add(User(
                 username='admin',
-                password=generate_password_hash('fangnailed'),
+                password=generate_password_hash('admin123'),
                 role='Admin'
             ))
 
