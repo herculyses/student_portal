@@ -345,36 +345,45 @@ class SecurityEvent(db.Model):
     )
 
 class ExamAccess(db.Model):
-    __tablename__ = 'exam_access'
+    __tablename__ = "exam_access"
+
+    __table_args__ = (
+        db.UniqueConstraint(
+            "exam_id",
+            "student_id",
+            name="uq_exam_student"
+        ),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
 
     exam_id = db.Column(
         db.Integer,
-        db.ForeignKey('exam.id'),
+        db.ForeignKey("exam.id"),
         nullable=False
     )
 
     student_id = db.Column(
         db.String(100),
-        db.ForeignKey('student.student_id'),
+        db.ForeignKey("student.student_id"),
         nullable=False
     )
 
-    entered_code = db.Column(
-        db.String(100)
-    )
+    entered_code = db.Column(db.String(100))
 
     status = db.Column(db.String(20), default="pending")
 
+    is_reset = db.Column(db.Boolean, default=False)
+    reset_at = db.Column(db.DateTime, nullable=True)
+
     student = db.relationship(
-        'Student',
+        "Student",
         lazy=True
     )
 
     exam = db.relationship(
-        'Exam',
-        backref='access_records'
+        "Exam",
+        backref="access_records"
     )
 
 class StudentAnswer(db.Model):
@@ -1196,7 +1205,9 @@ def view_exams():
 
     access_map = {
         (a.student_id, a.exam_id): a
-        for a in ExamAccess.query.all()
+        for a in ExamAccess.query.filter(
+            ExamAccess.status != "not_requested"
+        ).all()
     }
 
     exam_students = {}
@@ -1211,7 +1222,8 @@ def view_exams():
             )
             .filter(
                 ExamAccess.exam_id == exam.id,
-                Student.subject_code == exam.subject.subject_code
+                Student.subject_code == exam.subject.subject_code,
+                ExamAccess.status != "not_requested"
             )
             .distinct()
             .all()
@@ -1664,15 +1676,15 @@ def start_exam(exam_id):
     attempt = ExamAttempt.query.filter_by(
         student_id=student_id,
         exam_id=exam_id
-    ).first()
+    ).order_by(ExamAttempt.id.desc()).first()
 
     # 5. If already submitted → block
-    if attempt and attempt.is_submitted:
+    if attempt and attempt.is_submitted and not access.is_reset:
         flash("You already completed this exam.", "warning")
         return redirect(url_for('dashboard_student'))
 
     # 6. Create attempt only if missing
-    if not attempt:
+    if not attempt or access.is_reset:
 
         now = datetime.utcnow()
 
@@ -1688,6 +1700,11 @@ def start_exam(exam_id):
         db.session.add(attempt)
         db.session.commit()
 
+        access.is_reset = False
+        access.reset_at = None
+
+        db.session.commit()
+
     # 7. Store session state
     session['attempt_id'] = attempt.id
 
@@ -1697,6 +1714,9 @@ def start_exam(exam_id):
         question_id=first_question.id
     ))
 
+#===================================
+#===== REQUEST EXAM ROUTE =====
+#===================================
 @app.route("/request_exam", methods=["POST"])
 @login_required(role=['Admin', 'Instructor', 'Student'])
 def request_exam():
@@ -1875,6 +1895,36 @@ def request_exam():
                 "warning"
             )
 
+        if existing and existing.status == "not_requested":
+
+            existing.entered_code = access_code
+            existing.status = "pending"
+            #existing.is_reset = False
+            existing.reset_at = None
+
+            db.session.commit()
+
+            if "admin" not in sse_events:
+                sse_events["admin"] = []
+
+            sse_events["admin"].append({
+                "event": "new_request",
+                "data": {
+                    "access_id": existing.id,
+                    "student_id": str(student.student_id).strip(),
+                    "student_name": student.name,
+                    "exam_id": exam.id,
+                    "status": existing.status
+                }
+            })
+
+            return request_exam_response(
+                is_ajax,
+                True,
+                "Exam request submitted successfully.",
+                "success"
+            )
+
     # ==============================
     # CREATE ACCESS RECORD
     # ==============================
@@ -1922,6 +1972,62 @@ def request_exam():
         "success"
     )
 
+#======================================
+#===== CANCEL REQUEST EXAM ROUTE =====
+#======================================
+@app.route('/cancel-exam-request', methods=['POST'])
+@login_required(role=['Student'])
+def cancel_exam_request():
+
+    data = request.get_json(silent=True) or {}
+    exam_id = data.get("exam_id")
+    if not exam_id:
+        return jsonify({
+            "success": False,
+            "message": "Exam ID missing."
+        }), 400
+    student_id = session.get("student_id")
+
+    access = ExamAccess.query.filter_by(
+        exam_id=exam_id,
+        student_id=student_id,
+        status="pending"
+    ).first()
+
+    if not access:
+        return jsonify({
+            "success": False,
+            "message": "No pending request found."
+        })
+
+    access_id = access.id
+    student_id = access.student_id
+    exam_id = access.exam_id
+
+    db.session.delete(access)
+    db.session.commit()
+
+    if "admin" not in sse_events:
+        sse_events["admin"] = []
+
+    sse_events["admin"].append({
+        "event": "live_update",
+        "data": {
+            "access_id": access_id,
+            "student_id": student_id,
+            "exam_id": exam_id,
+            "status": "not_requested"
+        }
+    })
+
+    return jsonify({
+        "success": True,
+        "message": "Exam request cancelled."
+    })
+
+#======================================
+#===== TAKE EXAM ROUTE =====
+#======================================
 @app.route('/exam/<int:exam_id>/take/<int:question_id>')
 @login_required(role=['Admin', 'Instructor', 'Student'])
 def take_exam(exam_id, question_id):
@@ -2204,6 +2310,23 @@ def submit_exam(exam_id):
         access.status = "completed"
 
     db.session.commit()
+
+    # ==============================
+    # Notify Admin Dashboard
+    # ==============================
+    if access:
+
+        if "admin" not in sse_events:
+            sse_events["admin"] = []
+
+        sse_events["admin"].append({
+            "event": "live_update",
+            "data": {
+                "student_id": access.student_id,
+                "exam_id": access.exam_id,
+                "status": "completed"
+            }
+        })
 
     # 8. Clean session safely
     session.pop('attempt_id', None)
@@ -2626,6 +2749,40 @@ def student_dashboard_data():
         })
 
     return jsonify(result)
+
+# =========================
+# RESET EXAM OUTE
+# =========================
+@app.route("/reset-exam", methods=["POST"])
+@login_required(role=["Admin"])
+def reset_exam():
+
+    data = request.get_json()
+
+    exam_id = data.get("exam_id")
+    student_id = data.get("student_id")
+
+    access = ExamAccess.query.filter_by(
+        exam_id=exam_id,
+        student_id=student_id
+    ).first()
+
+    if not access:
+        return jsonify({
+            "success": False,
+            "message": "Exam access not found."
+        })
+
+    access.status = "not_requested"
+    access.is_reset = True
+    access.reset_at = datetime.utcnow()
+
+    db.session.commit()
+
+    return jsonify({
+        "success": True,
+        "message": "Exam has been reset. Student can request again."
+    })
 
 # =========================
 # SSE ROUTE

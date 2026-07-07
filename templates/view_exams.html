@@ -203,6 +203,18 @@ if (localStorage.getItem("darkMode") === "true") {
                                     {% elif access.status == "pending" %}
                                         <span class="badge bg-warning text-dark">Pending</span>
 
+                                    {% elif access.status == "completed" %}
+                                        <span class="badge bg-primary">Completed</span>
+
+                                    {% elif access.status == "rejected" %}
+                                        <span class="badge bg-danger">Rejected</span>
+
+                                    {% elif access.status == "forced_submit" %}
+                                        <span class="badge bg-dark">Force Submitted</span>
+
+                                    {% elif access.status == "not_requested" %}
+                                        <span class="badge bg-secondary">No Request</span>
+
                                     {% endif %}
 
                                 {% else %}
@@ -219,18 +231,40 @@ if (localStorage.getItem("darkMode") === "true") {
 
                                 {% if access and access.status == "pending" %}
 
+                                    <div class="d-flex justify-content-center gap-2">
+
+                                        <button
+                                            class="btn btn-success btn-sm"
+                                            onclick="approveRequest({{ access.id }})">
+
+                                            Approve
+
+                                        </button>
+
+                                        <button
+                                            class="btn btn-outline-danger btn-sm"
+                                            onclick="recycleExam(
+                                                {{ exam.id }},
+                                                '{{ student.student_id }}'
+                                            )">
+
+                                            Cancel
+
+                                        </button>
+
+                                    </div>
+
+                                {% elif access and access.status in ["approved", "completed", "rejected", "forced_submit"] %}
+
                                     <button
-                                        class="btn btn-success btn-sm"
-                                        onclick="approveRequest({{ access.id }})">
+                                        class="btn btn-outline-warning btn-sm"
+                                        onclick="recycleExam(
+                                            {{ exam.id }},
+                                            '{{ student.student_id }}'
+                                        )">
 
-                                        Approve
+                                        ♻ Reset
 
-                                    </button>
-
-                                {% elif access and access.status == "approved" %}
-
-                                    <button class="btn btn-secondary btn-sm" disabled>
-                                        Approved
                                     </button>
 
                                 {% else %}
@@ -574,12 +608,19 @@ function addToQueue(data) {
         `;
 
         actionCell.innerHTML = `
-            <button class="btn btn-success btn-sm"
-                    onclick="approveRequest(${data.access_id})">
+            <div class="d-flex gap-2 justify-content-center">
 
-                Approve
+                <button class="btn btn-success btn-sm"
+                        onclick="approveRequest(${data.access_id})">
+                    Approve
+                </button>
 
-            </button>
+                <button class="btn btn-outline-danger btn-sm"
+                        onclick="recycleExam(${data.exam_id}, '${data.student_id}')">
+                    Cancel
+                </button>
+
+            </div>
         `;
 
     } else {
@@ -621,12 +662,19 @@ function addToQueue(data) {
             <td id="action-${data.student_id}-${data.exam_id}"
                 class="text-center">
 
-                <button class="btn btn-success btn-sm"
-                        onclick="approveRequest(${data.access_id})">
+                <div class="d-flex gap-2 justify-content-center">
 
-                    Approve
+                    <button class="btn btn-success btn-sm"
+                            onclick="approveRequest(${data.access_id})">
+                        Approve
+                    </button>
 
-                </button>
+                    <button class="btn btn-outline-danger btn-sm"
+                            onclick="recycleExam(${data.exam_id}, '${data.student_id}')">
+                        Cancel
+                    </button>
+
+                </div>
 
             </td>
         `;
@@ -668,8 +716,12 @@ function updateStudentAccess(studentId, examId, status) {
         `;
 
         actionBox.innerHTML = `
-            <button class="btn btn-secondary btn-sm" disabled>
-                Approved
+            <button
+                class="btn btn-outline-warning btn-sm"
+                onclick="recycleExam(${examId}, '${studentId}')">
+
+                ♻ Reset
+
             </button>
         `;
 
@@ -678,6 +730,26 @@ function updateStudentAccess(studentId, examId, status) {
         setTimeout(() => {
             statusBox.classList.remove("approved-highlight");
         }, 3000);
+    }
+
+    // ================= Completed =================
+    else if (status === "completed") {
+
+        statusBox.innerHTML = `
+            <span class="badge bg-primary">
+                Completed
+            </span>
+        `;
+
+        actionBox.innerHTML = `
+            <button
+                class="btn btn-outline-warning btn-sm"
+                onclick="recycleExam(${examId}, '${studentId}')">
+
+                ♻ Reset
+
+            </button>
+        `;
     }
 
     // ================= REJECTED =================
@@ -690,9 +762,12 @@ function updateStudentAccess(studentId, examId, status) {
         `;
 
         actionBox.innerHTML = `
-            <button class="btn btn-warning btn-sm"
-                    onclick="reRequest(${studentId}, ${examId})">
-                Re-request
+            <button
+                class="btn btn-outline-warning btn-sm"
+                onclick="recycleExam(${examId}, '${studentId}')">
+
+                ♻ Reset
+
             </button>
         `;
 
@@ -701,6 +776,25 @@ function updateStudentAccess(studentId, examId, status) {
         setTimeout(() => {
             statusBox.classList.remove("approved-highlight");
         }, 3000);
+    }
+
+    else if (status === "forced_submit") {
+
+        statusBox.innerHTML = `
+            <span class="badge bg-danger">
+                Forced Submit
+            </span>
+        `;
+
+        actionBox.innerHTML = `
+            <button
+                class="btn btn-outline-warning btn-sm"
+                onclick="recycleExam(${examId}, '${studentId}')">
+
+                ♻ Reset
+
+            </button>
+        `;
     }
 
     // ================= PENDING =================
@@ -719,18 +813,14 @@ function updateStudentAccess(studentId, examId, status) {
         `;
     }
 
-    // ================= DEFAULT (NO REQUEST) =================
-    else {
+    else if (status === "not_requested") {
 
-        statusBox.innerHTML = `
-            <span class="badge bg-secondary">
-                No Request
-            </span>
-        `;
+        const row = statusBox.closest("tr");
 
-        actionBox.innerHTML = `
-            <span class="text-muted">—</span>
-        `;
+        if (row) {
+            row.remove();
+        }
+
     }
 }
 
@@ -861,6 +951,105 @@ document.addEventListener("DOMContentLoaded", function () {
 
 });
 </script>
+
+<! ============================================>
+<! ============👇 Reset Feature==============>
+<! ============================================>
+<script>
+function recycleExam(examId, studentId) {
+
+    const toastElement = document.getElementById("liveToast");
+    const toastMessage = document.getElementById("toastMessage");
+
+    fetch("/reset-exam", {
+
+        method: "POST",
+
+        headers: {
+            "Content-Type": "application/json"
+        },
+
+        body: JSON.stringify({
+            exam_id: examId,
+            student_id: studentId
+        })
+
+    })
+
+    .then(response => response.json())
+
+    .then(data => {
+
+        if (!data.success) {
+
+            toastMessage.textContent = data.message;
+
+            toastElement.classList.remove("text-bg-success");
+            toastElement.classList.add("text-bg-danger");
+
+            new bootstrap.Toast(toastElement).show();
+
+            return;
+        }
+
+        updateStudentAccess(
+            studentId,
+            examId,
+            "not_requested"
+        );
+
+        toastMessage.textContent = data.message;
+
+        toastElement.classList.remove("text-bg-danger");
+        toastElement.classList.add("text-bg-success");
+
+        new bootstrap.Toast(toastElement).show();
+
+    })
+
+    .catch(error => {
+
+        console.error(error);
+
+        toastMessage.textContent = "Unable to reset exam.";
+
+        toastElement.classList.remove("text-bg-success");
+        toastElement.classList.add("text-bg-danger");
+
+        new bootstrap.Toast(toastElement).show();
+
+    });
+
+}
+</script>
+
+<!-- ============================================ -->
+<!-- =============== LIVE TOAST ================= -->
+<!-- ============================================ -->
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+
+    <div id="liveToast"
+         class="toast align-items-center text-bg-success border-0"
+         role="alert">
+
+        <div class="d-flex">
+
+            <div class="toast-body" id="toastMessage">
+                Success
+            </div>
+
+            <button
+                type="button"
+                class="btn-close btn-close-white me-2 m-auto"
+                data-bs-dismiss="toast">
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
 
 </body>
 </html>

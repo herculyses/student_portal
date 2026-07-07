@@ -108,6 +108,8 @@ document.addEventListener("DOMContentLoaded", function () {
 
 });
 
+/* ================= SET EXAM ID ================= */
+
 let selectedExamId = null;
 
 function setExamId(examId) {
@@ -227,9 +229,21 @@ function updateExamCard(exam) {
         `;
 
         actionBox.innerHTML = `
-            <div class="waiting-transition text-warning fw-semibold d-flex align-items-center">
-                <span class="spinner-border spinner-border-sm me-2"></span>
-                Waiting for Approval...
+            <div class="waiting-transition">
+
+                <div class="text-warning fw-semibold d-flex align-items-center mb-2">
+                    <span class="spinner-border spinner-border-sm me-2"></span>
+                    Waiting for Approval...
+                </div>
+
+                <button
+                    class="btn btn-outline-danger btn-sm w-100"
+                    onclick="cancelExamRequest(${exam.exam_id})">
+
+                    Cancel
+
+                </button>
+
             </div>
         `;
 
@@ -241,7 +255,10 @@ function updateExamCard(exam) {
 
         }
 
-    else {
+    else if (
+        exam.status === "not_requested" ||
+        exam.status === "rejected"
+    ) {
 
         statusBox.innerHTML = `
             <span class="badge bg-secondary">
@@ -259,6 +276,66 @@ function updateExamCard(exam) {
         `;
 
     }
+}
+
+/* ================= CANCEL EXAM REQUEST ================= */
+
+function cancelExamRequest(examId) {
+
+    fetch("/cancel-exam-request", {
+
+        method: "POST",
+
+        headers: {
+            "Content-Type": "application/json",
+            "X-Requested-With": "XMLHttpRequest"
+        },
+
+        body: JSON.stringify({
+            exam_id: examId
+        })
+
+    })
+
+    .then(response => response.json())
+
+    .then(data => {
+
+        if (!data.success) {
+
+            alert(data.message);
+            return;
+
+        }
+
+        updateExamCard({
+
+            exam_id: examId,
+            status: "not_requested"
+
+        });
+
+        const toastElement =
+            document.getElementById("liveToast");
+
+        const toastMessage =
+            document.getElementById("toastMessage");
+
+        toastMessage.textContent = data.message;
+
+        toastElement.classList.remove("text-bg-danger");
+        toastElement.classList.add("text-bg-success");
+
+        new bootstrap.Toast(toastElement).show();
+
+    })
+
+    .catch(error => {
+
+        console.error("Cancel Request Error:", error);
+
+    });
+
 }
 
 /* ================= LIVE EXAM STATUS ================= */
@@ -294,9 +371,13 @@ document.addEventListener("DOMContentLoaded", function () {
 
         event.preventDefault();
 
+        const formData = new FormData(form);
+
         showSendingState();
 
         console.log("🚀 Sending request to:", form.action);
+
+        console.log("Exam ID being sent:", formData.get("exam_id"));
 
         fetch(form.action, {
 
