@@ -697,7 +697,240 @@ def get_exercise_records(student_id):
 def get_exam_records(student_id):
     pass
 
-# --- Login Required Decorator ---
+# =========================================================
+# ---- CENTRAL EXAM GRADING ENGINE ----
+# =========================================================
+def grade_attempt(attempt, forced=False):
+
+    """
+    Grades an exam attempt.
+
+    Returns:
+        access
+        score
+        total_points
+    """
+
+    student_id = attempt.student_id
+    exam_id = attempt.exam_id
+
+    # ============================
+    # Load all answers
+    # ============================
+    answers = StudentAnswer.query.filter_by(
+        attempt_id=attempt.id
+    ).all()
+
+    # ============================
+    # Load all questions
+    # ============================
+    questions = {
+        q.id: q
+        for q in Question.query.filter_by(
+            exam_id=exam_id
+        ).all()
+    }
+
+    score = 0
+
+    # ============================
+    # Grade answers
+    # ============================
+    for ans in answers:
+
+        question = questions.get(ans.question_id)
+
+        if not question:
+            continue
+
+        student_answer = (
+            ans.selected_answer or ""
+        ).strip().lower()
+
+        correct = (
+            question.correct_answer or ""
+        ).strip().lower()
+
+        ans.is_correct = (
+            student_answer == correct
+        )
+
+        if ans.is_correct:
+            score += question.points
+
+    # ============================
+    # Total Points
+    # ============================
+    total_points = sum(
+        q.points
+        for q in questions.values()
+    )
+
+    # ============================
+    # Finalize Attempt
+    # ============================
+    attempt.score = score
+    attempt.is_submitted = True
+    attempt.submitted_at = datetime.utcnow()
+
+    return score, total_points
+
+# ======================================
+# ---- Update Exam Access ----
+# ======================================
+def update_exam_access(student_id, exam_id, status):
+
+    access = ExamAccess.query.filter_by(
+        student_id=student_id,
+        exam_id=exam_id
+    ).first()
+
+    if access:
+        access.status = status
+        db.session.commit()
+
+    return access
+
+# ======================================
+# ---- Build Exam Summary ----
+# ======================================
+
+def build_exam_summary(exam_id):
+
+    accesses = (
+        ExamAccess.query
+        .filter_by(exam_id=exam_id)
+        .filter(
+            ExamAccess.status != "not_requested"
+        )
+        .all()
+    )
+
+    summary = {
+        "requested": len(accesses),
+        "pending": 0,
+        "approved": 0,
+        "completed": 0,
+        "rejected": 0,
+        "forced_submit": 0,
+        "passed": 0,
+        "failed": 0,
+        "average": 0,
+        "highest": 0
+    }
+
+    for access in accesses:
+
+        if access.status in summary:
+            summary[access.status] += 1
+
+    total_points = sum(
+        q.points
+        for q in Question.query.filter_by(
+            exam_id=exam_id
+        ).all()
+    )
+
+    attempts = (
+        ExamAttempt.query
+        .filter_by(
+            exam_id=exam_id,
+            is_submitted=True
+        )
+        .all()
+    )
+
+    percentages = []
+
+    for attempt in attempts:
+
+        if total_points <= 0:
+            continue
+
+        percentage = round(
+            (attempt.score / total_points) * 100
+        )
+
+        percentages.append(percentage)
+
+        if percentage >= 70:
+            summary["passed"] += 1
+        else:
+            summary["failed"] += 1
+
+    if percentages:
+
+        summary["average"] = round(
+            sum(percentages) / len(percentages),
+            1
+        )
+
+        summary["highest"] = max(percentages)
+
+    return summary
+
+# ======================================
+# ---- Build Live Update Payload ----
+# ======================================
+
+def build_live_update_payload(
+    access,
+    attempt,
+    score,
+    total_points,
+    summary,
+    status="completed"
+):
+
+    return {
+
+        "access_id": access.id,
+
+        "student_id": access.student_id,
+        "student_name": access.student.name,
+        "section": access.student.section,
+
+        "exam_id": access.exam_id,
+
+        "status": status,
+
+        "score": score,
+
+        "total_points": total_points,
+
+        "submitted_at": (
+            attempt.submitted_at + timedelta(hours=8)
+        ).strftime("%Y-%m-%d %I:%M %p"),
+
+        "summary": summary
+    }
+
+# ======================================
+# ---- Send Admin SSE ----
+# ======================================
+def send_admin_event(event, data):
+
+    if "admin" not in sse_events:
+        sse_events["admin"] = []
+
+    sse_events["admin"].append({
+        "event": event,
+        "data": data
+    })
+
+# ======================================
+# ===== Clear Exam Session =============
+# ======================================
+
+def clear_exam_session():
+
+    session.pop("attempt_id", None)
+    session.pop("question_order", None)
+    session.pop("exam_end_time", None)
+
+# ======================================
+# ---- Login Required Decorator ----
+# ======================================
 def login_required(role=None):
     def decorator(f):
         @wraps(f)
@@ -1212,6 +1445,7 @@ def view_exams():
 
     exam_students = {}
     score_map = {}
+    exam_summary = {}
 
     for exam in exams:
 
@@ -1231,6 +1465,48 @@ def view_exams():
         )
 
         exam_students[exam.id] = students
+
+        # ===========================
+        # BUILD SUMMARY
+        # ===========================
+
+        summary = {
+            "requested": len(students),
+            "pending": 0,
+            "approved": 0,
+            "completed": 0,
+            "rejected": 0,
+            "forced_submit": 0,
+            "passed": 0,
+            "failed": 0,
+            "average": 0,
+            "highest": 0
+        }
+
+        percentages = []
+
+        for student in students:
+
+            access = access_map.get(
+                (student.student_id, exam.id)
+            )
+
+            if access:
+
+                if access.status == "pending":
+                    summary["pending"] += 1
+
+                elif access.status == "approved":
+                    summary["approved"] += 1
+
+                elif access.status == "completed":
+                    summary["completed"] += 1
+
+                elif access.status == "rejected":
+                    summary["rejected"] += 1
+
+                elif access.status == "forced_submit":
+                    summary["forced_submit"] += 1
 
         # ===========================
         # BUILD SCORE MAP
@@ -1267,7 +1543,34 @@ def view_exams():
                     if attempt and attempt.submitted_at
                     else None
                 )
+
             }
+
+            # ===========================
+            # UPDATE SUMMARY
+            # ===========================
+
+            score = score_map[(student.student_id, exam.id)]
+
+            if score["percentage"] is not None:
+
+                percentages.append(score["percentage"])
+
+                if score["percentage"] >= 70:
+                    summary["passed"] += 1
+                else:
+                    summary["failed"] += 1
+
+            if percentages:
+
+                summary["average"] = round(
+                    sum(percentages) / len(percentages),
+                    1
+                )
+
+                summary["highest"] = max(percentages)
+
+            exam_summary[exam.id] = summary
 
         print("\n==============================")
         print(f"Exam ID: {exam.id}")
@@ -1289,6 +1592,7 @@ def view_exams():
         exam_students=exam_students,
         access_map=access_map,
         score_map=score_map,
+        exam_summary=exam_summary,
         subjects=subjects
     )
 
@@ -1673,7 +1977,6 @@ def student_exams():
 # =========================================================
 # 5. 🚀 EXAM FLOW (START → TAKE → SAVE → SUBMIT)
 # =========================================================
-
 @app.route('/exam/<int:exam_id>/start')
 @login_required(role=['Admin', 'Instructor', 'Student'])
 def start_exam(exam_id):
@@ -1746,6 +2049,24 @@ def start_exam(exam_id):
 
     # 7. Store session state
     session['attempt_id'] = attempt.id
+
+    # ==============================
+    # Notify Admin: Student Started Exam
+    # ==============================
+    if "admin" not in sse_events:
+        sse_events["admin"] = []
+
+    sse_events["admin"].append({
+        "event": "live_update",
+        "data": {
+            "access_id": access.id,
+            "student_id": student_id,
+            "student_name": access.student.name,
+            "section": access.student.section,
+            "exam_id": exam.id,
+            "status": "taking"
+        }
+    })
 
     return redirect(url_for(
         'take_exam',
@@ -2315,103 +2636,59 @@ def submit_exam(exam_id):
     # 2. Prevent double submission immediately
     if attempt.is_submitted:
         flash("Exam already submitted.", "warning")
-        return redirect(url_for('dashboard_student'))
 
         print("===== SENDING LIVE UPDATE =====")
         print(sse_events.get("admin"))
         print("===============================")
 
-    # 3. Load all answers in one go
-    answers = StudentAnswer.query.filter_by(attempt_id=attempt.id).all()
+        return redirect(url_for('dashboard_student'))
 
-    # 4. Load all questions once (avoid N+1 queries)
-    questions = {
-        q.id: q for q in Question.query.filter_by(exam_id=exam_id).all()
-    }
-
-    score = 0
-
-    # 5. Grade safely
-    for ans in answers:
-
-        question = questions.get(ans.question_id)
-
-        if not question:
-            continue
-
-        student_answer = (ans.selected_answer or "").strip().lower()
-        correct = (question.correct_answer or "").strip().lower()
-
-        if question.question_type == "identification":
-            is_correct = student_answer == correct
-        else:
-            is_correct = student_answer == correct
-
-        ans.is_correct = is_correct
-
-        if is_correct:
-            score += question.points
-
-    # 6. Finalize attempt
-    attempt.score = score
-    attempt.is_submitted = True
-    attempt.submitted_at = datetime.utcnow()
+    # ============================
+    # Grade Exam
+    # ============================
+    score, total_points = grade_attempt(attempt)
 
     # 7. Mark exam access as completed
-    access = ExamAccess.query.filter_by(
-        student_id=student_id,
-        exam_id=exam_id
-    ).first()
-
-    if access:
-        access.status = "completed"
-
-    db.session.commit()
+    access = update_exam_access(
+        student_id,
+        exam_id,
+        "completed"
+    )
 
     # ==============================
     # Notify Admin Dashboard
     # ==============================
     if access:
 
-        if "admin" not in sse_events:
-            sse_events["admin"] = []
+        # ==============================
+        # BUILD LIVE SUMMARY
+        # ==============================
 
-        sse_events["admin"].append({
-            "event": "live_update",
-            "data": {
-                "access_id": access.id,
+        summary = build_exam_summary(exam_id)
 
-                "student_id": access.student_id,
-                "student_name": access.student.name,
-                "section": access.student.section,
-                "exam_id": access.exam_id,
+        payload = build_live_update_payload(
+            access,
+            attempt,
+            score,
+            total_points,
+            summary
+        )
 
-                "status": "completed",
-
-                "score": score,
-
-                "total_points": sum(
-                    q.points for q in Question.query.filter_by(exam_id=exam_id).all()
-                ),
-
-                "submitted_at": (
-                    attempt.submitted_at + timedelta(hours=8)
-                ).strftime("%Y-%m-%d %I:%M %p")
-            }
-        })
+        send_admin_event(
+            "live_update",
+            payload
+        )
 
     # 8. Clean session safely
-    session.pop('attempt_id', None)
-    session.pop('question_order', None)
-    session.pop('exam_end_time', None)
+    clear_exam_session()
 
     flash(f"Exam submitted successfully! Score: {score}", "success")
-
-    return redirect(url_for('dashboard_student'))
 
     print("===== SENDING LIVE UPDATE =====")
     print(sse_events.get("admin"))
     print("===============================")
+
+    return redirect(url_for('dashboard_student'))
 
 # ==========================================================
 # REVIEW MODULE

@@ -57,6 +57,15 @@ if (localStorage.getItem("darkMode") === "true") {
     display: flex;
     justify-content: flex-end;
 }
+
+.card-body .card {
+    transition: transform .2s ease, box-shadow .2s ease;
+}
+
+.card-body .card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 .5rem 1rem rgba(0,0,0,.15);
+}
 </style>
 </head>
 <body class="bg-light">
@@ -142,6 +151,111 @@ if (localStorage.getItem("darkMode") === "true") {
             <!-- ============================= -->
             <!-- STUDENTS TABLE -->
             <!-- ============================= -->
+            <div class="card shadow-sm border-0 mb-4">
+
+                <div class="card-header bg-primary text-white fw-bold">
+                    📊 Exam Summary
+                </div>
+
+                <div class="card-body">
+
+                    <div class="row g-3">
+
+                        <div class="col-md-3">
+                            <div class="card bg-light border-start border-primary border-4 h-100">
+                                <div class="card-body text-center">
+                                    <h3 id="summary-requested-{{ exam.id }}">{{ exam_summary[exam.id].requested }}</h3>
+                                    <small class="text-muted">👥 Requested</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="card bg-light border-start border-warning border-4 h-100">
+                                <div class="card-body text-center">
+                                    <h3 id="summary-pending-{{ exam.id }}">{{ exam_summary[exam.id].pending }}</h3>
+                                    <small class="text-muted">🟡 Pending</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="card bg-light border-start border-success border-4 h-100">
+                                <div class="card-body text-center">
+                                    <h3 id="summary-approved-{{ exam.id }}">{{ exam_summary[exam.id].approved }}</h3>
+                                    <small class="text-muted">🟢 Approved</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="card bg-light border-start border-info border-4 h-100">
+                                <div class="card-body text-center">
+                                    <h3 id="summary-completed-{{ exam.id }}">{{ exam_summary[exam.id].completed }}</h3>
+                                    <small class="text-muted">🔵 Completed</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="card bg-light border-start border-danger border-4 h-100">
+                                <div class="card-body text-center">
+                                    <h3 id="summary-rejected-{{ exam.id }}">{{ exam_summary[exam.id].rejected }}</h3>
+                                    <small class="text-muted">🔴 Rejected</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="card bg-light border-start border-dark border-4 h-100">
+                                <div class="card-body text-center">
+                                    <h3 id="summary-forced-{{ exam.id }}">{{ exam_summary[exam.id].forced_submit }}</h3>
+                                    <small class="text-muted">⚫ Forced</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="card bg-light border-start border-success border-4 h-100">
+                                <div class="card-body text-center">
+                                    <h3 id="summary-passed-{{ exam.id }}">{{ exam_summary[exam.id].passed }}</h3>
+                                    <small class="text-muted">✅ Passed</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-3">
+                            <div class="card bg-light border-start border-danger border-4 h-100">
+                                <div class="card-body text-center">
+                                    <h3 id="summary-failed-{{ exam.id }}">{{ exam_summary[exam.id].failed }}</h3>
+                                    <small class="text-muted">❌ Failed</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="card bg-light border-start border-secondary border-4 h-100">
+                                <div class="card-body text-center">
+                                    <h3 id="summary-average-{{ exam.id }}">{{ exam_summary[exam.id].average }}%</h2>
+                                    <small class="text-muted">📈 Average Score</small>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="card bg-light border-start border-success border-4 h-100">
+                                <div class="card-body text-center">
+                                    <h3 id="summary-highest-{{ exam.id }}">{{ exam_summary[exam.id].highest }}%</h2>
+                                    <small class="text-muted">🏆 Highest Score</small>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
             <div class="table-responsive mt-4">
                 <table class="table table-bordered table-hover align-middle">
                     <thead class="table-light text-center">
@@ -563,6 +677,9 @@ adminStream.addEventListener("new_request", function (e) {
     addToQueue(data);
 });
 
+// ============================================
+// =========👇SSE listener==========
+// ============================================
 adminStream.addEventListener("live_update", function (e) {
 
     console.log("🔥 LIVE UPDATE EVENT RECEIVED");
@@ -581,6 +698,12 @@ adminStream.addEventListener("live_update", function (e) {
 
     // Update row details instantly
     updateStudentRow(data);
+
+    if (data.summary) {
+        console.log("SUMMARY FUNCTION:", typeof updateSummaryCards);
+        console.log("SUMMARY DATA:", data.summary);
+        updateSummaryCards(data.exam_id, data.summary);
+    }
 
 });
 
@@ -761,6 +884,27 @@ function updateStudentAccess(studentId, examId, status) {
         setTimeout(() => {
             statusBox.classList.remove("approved-highlight");
         }, 3000);
+    }
+
+    // ================= TAKING =================
+    else if (status === "taking") {
+
+        statusBox.innerHTML = `
+            <span class="badge bg-info">
+                🟢 Taking Exam
+            </span>
+        `;
+
+        actionBox.innerHTML = `
+            <button
+                class="btn btn-danger btn-sm"
+                onclick="forceSubmit(${examId}, '${studentId}')">
+
+                ⛔ Force Submit
+
+            </button>
+        `;
+
     }
 
     // ================= Completed =================
@@ -976,6 +1120,38 @@ function updateStudentRow(data) {
         `;
 
     }
+
+}
+
+// ============================================
+// =========👇 Updates Summary Cards==========
+// ============================================
+function updateSummaryCards(examId, summary) {
+
+    console.log("🔥 updateSummaryCards() CALLED");
+    console.log(summary);
+
+    console.log("📊 updateSummaryCards()", examId, summary);
+
+    const setValue = (id, value) => {
+        const element = document.getElementById(`${id}-${examId}`);
+        if (element) {
+            element.textContent = value;
+        }
+    };
+
+    setValue("summary-requested", summary.requested);
+    setValue("summary-pending", summary.pending);
+    setValue("summary-approved", summary.approved);
+    setValue("summary-completed", summary.completed);
+    setValue("summary-rejected", summary.rejected);
+    setValue("summary-forced", summary.forced_submit);
+    setValue("summary-passed", summary.passed);
+    setValue("summary-failed", summary.failed);
+    setValue("summary-average", summary.average + "%");
+    setValue("summary-highest", summary.highest + "%");
+
+    console.log("📊 Summary Updated", summary);
 
 }
 
