@@ -761,10 +761,7 @@ def grade_attempt(attempt, forced=False):
     # ============================
     # Total Points
     # ============================
-    total_points = sum(
-        q.points
-        for q in questions.values()
-    )
+    total_points = get_total_points(exam_id)
 
     # ============================
     # Finalize Attempt
@@ -824,21 +821,9 @@ def build_exam_summary(exam_id):
         if access.status in summary:
             summary[access.status] += 1
 
-    total_points = sum(
-        q.points
-        for q in Question.query.filter_by(
-            exam_id=exam_id
-        ).all()
-    )
+    total_points = get_total_points(exam_id)
 
-    attempts = (
-        ExamAttempt.query
-        .filter_by(
-            exam_id=exam_id,
-            is_submitted=True
-        )
-        .all()
-    )
+    attempts = get_submitted_attempts(exam_id)
 
     percentages = []
 
@@ -847,8 +832,9 @@ def build_exam_summary(exam_id):
         if total_points <= 0:
             continue
 
-        percentage = round(
-            (attempt.score / total_points) * 100
+        percentage = calculate_percentage(
+            attempt.score,
+            total_points
         )
 
         percentages.append(percentage)
@@ -927,6 +913,57 @@ def clear_exam_session():
     session.pop("attempt_id", None)
     session.pop("question_order", None)
     session.pop("exam_end_time", None)
+
+# ======================================
+# ===== Get Exam Questions =============
+# ======================================
+
+def get_exam_questions(exam_id):
+
+    return (
+        Question.query
+        .filter_by(exam_id=exam_id)
+        .order_by(Question.id.asc())
+        .all()
+    )
+
+# ======================================
+# ===== Get Total Exam Points ==========
+# ======================================
+
+def get_total_points(exam_id):
+
+    return sum(
+        question.points
+        for question in get_exam_questions(exam_id)
+    )
+
+# ======================================
+# ===== Get Submitted Attempts =========
+# ======================================
+def get_submitted_attempts(exam_id):
+
+    return (
+        ExamAttempt.query
+        .filter_by(
+            exam_id=exam_id,
+            is_submitted=True
+        )
+        .all()
+    )
+
+# ======================================
+# ===== Calculate Percentage ===========
+# ======================================
+
+def calculate_percentage(score, total_points):
+
+    if total_points <= 0:
+        return 0
+
+    return round(
+        (score / total_points) * 100
+    )
 
 # ======================================
 # ---- Login Required Decorator ----
@@ -1321,42 +1358,6 @@ def delete_subject(subject_id):
     try:
 
         # ==========================================
-        # DELETE ALL EXAMS UNDER THIS SUBJECT
-        # ==========================================
-        exams = Exam.query.filter_by(subject_id=subject.id).all()
-
-        for exam in exams:
-
-            # delete attempts + answers
-            attempts = ExamAttempt.query.filter_by(
-                exam_id=exam.id
-            ).all()
-
-            for attempt in attempts:
-
-                StudentAnswer.query.filter_by(
-                    attempt_id=attempt.id
-                ).delete()
-
-            # delete attempts
-            ExamAttempt.query.filter_by(
-                exam_id=exam.id
-            ).delete()
-
-            # delete access requests
-            ExamAccess.query.filter_by(
-                exam_id=exam.id
-            ).delete()
-
-            # delete questions
-            Question.query.filter_by(
-                exam_id=exam.id
-            ).delete()
-
-            # delete exam
-            db.session.delete(exam)
-
-        # ==========================================
         # DELETE SUBJECT
         # ==========================================
         db.session.delete(subject)
@@ -1725,7 +1726,7 @@ def add_question(exam_id):
         flash("Questions added successfully!", "success")
         return redirect(url_for('add_question', exam_id=exam.id))
 
-    questions = Question.query.filter_by(exam_id=exam.id).all()
+    questions = get_exam_questions(exam_id)
 
     return render_template(
         'add_question.html',
@@ -1871,9 +1872,7 @@ def export_questions(exam_id):
 
     exam = Exam.query.get_or_404(exam_id)
 
-    questions = Question.query.filter_by(
-        exam_id=exam.id
-    ).all()
+    questions = get_exam_questions(exam_id)
 
     data = [{
         'question': q.question_text,
@@ -2447,9 +2446,7 @@ def take_exam(exam_id, question_id):
 
     exam = Exam.query.get_or_404(exam_id)
 
-    questions = Question.query.filter_by(
-        exam_id=exam_id
-    ).order_by(Question.id.asc()).all()
+    questions = get_exam_questions(exam_id)
 
     if not questions:
         flash("No questions found.", "danger")
@@ -2591,9 +2588,7 @@ def submit_answer(exam_id):
     db.session.commit()
 
     # 5. Load next question
-    questions = Question.query.filter_by(
-        exam_id=exam_id
-    ).order_by(Question.id.asc()).all()
+    questions = get_exam_questions(exam_id)
 
     question_ids = [q.id for q in questions]
 
@@ -2708,9 +2703,7 @@ def review_answers(exam_id):
     # Load all questions in this exam
     # ==========================================================
 
-    questions = Question.query.filter_by(
-        exam_id=exam_id
-    ).order_by(Question.id.asc()).all()
+    questions = get_exam_questions(exam_id)
 
     # ==========================================================
     # Load student's saved answers
