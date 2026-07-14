@@ -373,6 +373,142 @@ body{
 
 </div>
 
+<!-- ========================================================= -->
+<!-- FINISH EXAM MODAL -->
+<!-- ========================================================= -->
+
+<div
+    class="modal fade"
+    id="finishExamModal"
+    tabindex="-1"
+    data-bs-backdrop="static"
+    data-bs-keyboard="false">
+
+    <div class="modal-dialog">
+
+        <div class="modal-content">
+
+            <div class="modal-header bg-success text-white">
+
+                <h5 class="modal-title">
+
+                    Finish Examination
+
+                </h5>
+
+            </div>
+
+            <div class="modal-body">
+
+                <p class="mb-3">
+
+                    Are you sure you want to submit your examination?
+
+                </p>
+
+                <div id="finishExamSummary">
+
+                    Loading...
+
+                </div>
+
+                <div class="alert alert-warning mt-3 mb-0">
+
+                    Once submitted, you can no longer modify your answers.
+
+                </div>
+
+            </div>
+
+            <div class="modal-footer">
+
+                <button
+                    type="button"
+                    class="btn btn-secondary"
+                    data-bs-dismiss="modal">
+
+                    Continue Exam
+
+                </button>
+
+                <button
+                    type="button"
+                    class="btn btn-success"
+                    onclick="Exam.submit.confirmFinish()">
+
+                    Submit Exam
+
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<!-- ========================================================= -->
+<!-- SECURITY VIOLATION MODAL -->
+<!-- ========================================================= -->
+
+<div class="modal fade"
+     id="securityViolationModal"
+     tabindex="-1"
+     data-bs-backdrop="static"
+     data-bs-keyboard="false">
+
+    <div class="modal-dialog">
+
+        <div class="modal-content">
+
+            <div class="modal-header bg-danger text-white">
+
+                <h5 class="modal-title">
+
+                    Security Threshold Reached
+
+                </h5>
+
+            </div>
+
+            <div class="modal-body">
+
+                <p>
+
+                    Your security score has reached
+                    <strong>0%</strong>.
+
+                </p>
+
+                <p>
+
+                    Your examination has been
+                    automatically submitted because the
+                    maximum security threshold was exceeded.
+
+                </p>
+
+            </div>
+
+            <div class="modal-footer">
+
+                <button
+                    id="securityReturnBtn"
+                    class="btn btn-danger">
+
+                    Return to Dashboard
+
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>

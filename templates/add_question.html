@@ -550,7 +550,7 @@ if (localStorage.getItem("darkMode") === "true") {
 
         <div style="width:85%;">
 
-            <strong>
+            <strong class="question-title">
 
                 {{ q.question_text }}
 
@@ -559,12 +559,27 @@ if (localStorage.getItem("darkMode") === "true") {
         </div>
 
         <!-- DELETE -->
-        <button class="btn btn-danger btn-sm delete-question-btn"
+        <div class="d-flex gap-2">
+
+            <button
+                class="btn btn-warning btn-sm edit-question-btn"
                 data-id="{{ q.id }}">
 
-            <i class="bi bi-trash-fill"></i> Delete
+                <i class="bi bi-pencil-square"></i>
+                Edit
 
-        </button>
+            </button>
+
+            <button
+                class="btn btn-danger btn-sm delete-question-btn"
+                data-id="{{ q.id }}">
+
+                <i class="bi bi-trash-fill"></i>
+                Delete
+
+            </button>
+
+        </div>
 
     </div>
 
@@ -572,12 +587,23 @@ if (localStorage.getItem("darkMode") === "true") {
 
     {% if q.question_type == "mcq" %}
 
-        <div class="ms-2">
+        <div class="ms-2 question-choices">
 
-            A. {{ q.choice_a }} <br>
-            B. {{ q.choice_b }} <br>
-            C. {{ q.choice_c }} <br>
-            D. {{ q.choice_d }}
+            <div class="choice-a">
+                A. {{ q.choice_a }}
+            </div>
+
+            <div class="choice-b">
+                B. {{ q.choice_b }}
+            </div>
+
+            <div class="choice-c">
+                C. {{ q.choice_c }}
+            </div>
+
+            <div class="choice-d">
+                D. {{ q.choice_d }}
+            </div>
 
         </div>
 
@@ -593,14 +619,14 @@ if (localStorage.getItem("darkMode") === "true") {
 
     <br><br>
 
-    <span class="badge bg-success">
+    <span class="badge bg-success correct-answer">
 
         Correct:
         {{ q.correct_answer }}
 
     </span>
 
-    <span class="badge bg-primary">
+    <span class="badge bg-primary question-points">
 
         {{ q.points }} pts
 
@@ -652,6 +678,77 @@ document.addEventListener("DOMContentLoaded", function () {
 
         let modal = bootstrap.Modal.getOrCreateInstance(modalEl);
         modal.show();
+    });
+
+    // =========================
+    // OPEN EDIT MODAL
+    // =========================
+    document.addEventListener("click", function (e) {
+
+        const btn = e.target.closest(".edit-question-btn");
+
+        if (!btn) return;
+
+        const questionId = btn.dataset.id;
+
+        fetch(`/edit-question/${questionId}`, {
+
+            headers: {
+                "X-Requested-With": "XMLHttpRequest"
+            }
+
+        })
+
+        .then(response => response.json())
+
+        .then(data => {
+
+            document.getElementById("editQuestionId").value =
+                data.id;
+
+            document.getElementById("editQuestionText").value =
+                data.question_text;
+
+            document.getElementById("editQuestionType").value =
+                data.question_type;
+
+            document.getElementById("editChoiceA").value =
+                data.choice_a || "";
+
+            document.getElementById("editChoiceB").value =
+                data.choice_b || "";
+
+            document.getElementById("editChoiceC").value =
+                data.choice_c || "";
+
+            document.getElementById("editChoiceD").value =
+                data.choice_d || "";
+
+            document.getElementById("editCorrectAnswer").value =
+                data.correct_answer || "";
+
+            document.getElementById("editPoints").value =
+                data.points;
+
+            const isMCQ = data.question_type === "mcq";
+
+            document
+                .querySelectorAll(
+                    "#editQuestionModal .mcq-edit"
+                )
+                .forEach(el => {
+
+                    el.style.display =
+                        isMCQ ? "" : "none";
+
+                });
+
+            bootstrap.Modal.getOrCreateInstance(
+                document.getElementById("editQuestionModal")
+            ).show();
+
+        });
+
     });
 
     // =========================
@@ -974,6 +1071,300 @@ document.addEventListener("input", function(e){
   </div>
 </div>
 
+<!-- ===================================== -->
+<!-- EDIT QUESTION MODAL -->
+<!-- ===================================== -->
+
+<div class="modal fade"
+     id="editQuestionModal"
+     tabindex="-1">
+
+    <div class="modal-dialog modal-lg">
+
+        <div class="modal-content">
+
+            <div class="modal-header bg-warning">
+
+                <h5 class="modal-title">
+                    ✏ Edit Question
+                </h5>
+
+                <button
+                    type="button"
+                    class="btn-close"
+                    data-bs-dismiss="modal">
+                </button>
+
+            </div>
+
+            <div class="modal-body">
+
+                <input
+                    type="hidden"
+                    id="editQuestionId">
+
+                <div class="mb-3">
+
+                    <label class="form-label fw-bold">
+                        Question
+                    </label>
+
+                    <textarea
+                        id="editQuestionText"
+                        class="form-control"
+                        rows="3">
+                    </textarea>
+
+                </div>
+
+                <div class="mb-3">
+
+                    <label class="form-label fw-bold">
+                        Question Type
+                    </label>
+
+                    <select
+                        id="editQuestionType"
+                        class="form-select">
+
+                        <option value="mcq">
+                            Multiple Choice
+                        </option>
+
+                        <option value="identification">
+                            Identification
+                        </option>
+
+                    </select>
+
+                </div>
+
+                <div class="row mcq-edit">
+
+                    <div class="col-md-6">
+
+                        <label class="form-label">
+                            Choice A
+                        </label>
+
+                        <input
+                            id="editChoiceA"
+                            class="form-control">
+
+                    </div>
+
+                    <div class="col-md-6">
+
+                        <label class="form-label">
+                            Choice B
+                        </label>
+
+                        <input
+                            id="editChoiceB"
+                            class="form-control">
+
+                    </div>
+
+                </div>
+
+                <div class="row mcq-edit">
+
+                    <div class="col-md-6">
+
+                        <label class="form-label">
+                            Choice C
+                        </label>
+
+                        <input
+                            id="editChoiceC"
+                            class="form-control">
+
+                    </div>
+
+                    <div class="col-md-6">
+
+                        <label class="form-label">
+                            Choice D
+                        </label>
+
+                        <input
+                            id="editChoiceD"
+                            class="form-control">
+
+                    </div>
+
+                </div>
+
+                <div class="row mt-3">
+
+                    <div class="col-md-6">
+
+                        <label class="form-label">
+                            Correct Answer
+                        </label>
+
+                        <input
+                            id="editCorrectAnswer"
+                            class="form-control">
+
+                    </div>
+
+                    <div class="col-md-6">
+
+                        <label class="form-label">
+                            Points
+                        </label>
+
+                        <input
+                            id="editPoints"
+                            type="number"
+                            class="form-control">
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="modal-footer">
+
+                <button
+                    class="btn btn-warning"
+                    id="saveQuestionChanges">
+
+                    💾 Save Changes
+
+                </button>
+
+                <button
+                    class="btn btn-secondary"
+                    data-bs-dismiss="modal">
+
+                    Cancel
+
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+
+document.getElementById("saveQuestionChanges")
+
+.addEventListener("click", function () {
+
+    const questionId =
+        document.getElementById("editQuestionId").value;
+
+    fetch(`/edit-question/${questionId}`, {
+
+        method: "POST",
+
+        headers: {
+
+            "Content-Type": "application/json"
+
+        },
+
+        body: JSON.stringify({
+
+            question_text:
+                document.getElementById("editQuestionText").value,
+
+            question_type:
+                document.getElementById("editQuestionType").value,
+
+            choice_a:
+                document.getElementById("editChoiceA").value,
+
+            choice_b:
+                document.getElementById("editChoiceB").value,
+
+            choice_c:
+                document.getElementById("editChoiceC").value,
+
+            choice_d:
+                document.getElementById("editChoiceD").value,
+
+            correct_answer:
+                document.getElementById("editCorrectAnswer").value,
+
+            points:
+                document.getElementById("editPoints").value
+
+        })
+
+    })
+
+    .then(response => response.json())
+
+    .then(data => {
+
+        if (data.success) {
+
+            const card = document.querySelector(
+                `.question-item-${questionId}`
+            );
+
+            if (card) {
+
+                card.querySelector(".question-title").textContent =
+                    document.getElementById("editQuestionText").value;
+
+                const choiceA = card.querySelector(".choice-a");
+                if (choiceA)
+                    choiceA.textContent =
+                        "A. " + document.getElementById("editChoiceA").value;
+
+                const choiceB = card.querySelector(".choice-b");
+                if (choiceB)
+                    choiceB.textContent =
+                        "B. " + document.getElementById("editChoiceB").value;
+
+                const choiceC = card.querySelector(".choice-c");
+                if (choiceC)
+                    choiceC.textContent =
+                        "C. " + document.getElementById("editChoiceC").value;
+
+                const choiceD = card.querySelector(".choice-d");
+                if (choiceD)
+                    choiceD.textContent =
+                        "D. " + document.getElementById("editChoiceD").value;
+
+                const correct = card.querySelector(".correct-answer");
+                if (correct)
+                    correct.textContent =
+                        "Correct: " +
+                        document.getElementById("editCorrectAnswer").value;
+
+                const points = card.querySelector(".question-points");
+                if (points)
+                    points.textContent =
+                        document.getElementById("editPoints").value + " pts";
+
+            }
+
+            bootstrap.Modal.getInstance(
+                document.getElementById("editQuestionModal")
+            ).hide();
+
+            bootstrap.Toast.getOrCreateInstance(
+                document.getElementById("editSuccessToast")
+            ).show();
+
+        }
+
+    });
+
+});
+
+</script>
+
 <!-- DELETE SUCCESS ALERT -->
 <div id="deleteSuccessAlert"
      class="alert alert-success position-fixed top-0 end-0 m-4 shadow d-none"
@@ -981,6 +1372,28 @@ document.addEventListener("input", function(e){
 
     <i class="bi bi-check-circle-fill"></i>
     Question deleted successfully.
+
+</div>
+<div id="editSuccessToast"
+     class="toast position-fixed top-0 end-0 m-4 text-bg-success border-0"
+     role="alert"
+     style="z-index:9999;">
+
+    <div class="d-flex">
+
+        <div class="toast-body">
+
+            ✅ Question updated successfully.
+
+        </div>
+
+        <button
+            type="button"
+            class="btn-close btn-close-white me-2 m-auto"
+            data-bs-dismiss="toast">
+        </button>
+
+    </div>
 
 </div>
 

@@ -18,6 +18,7 @@ from collections import defaultdict
 
 import pandas as pd
 import tempfile
+import random
 import time
 import json
 import os
@@ -407,7 +408,57 @@ class StudentAnswer(db.Model):
 
     is_correct = db.Column(db.Boolean)
 
-# --- FlaskForms ---
+# ======================================================
+# RANDOMIZED QUESTION ORDER
+# One record per question per exam attempt
+# ======================================================
+
+class AttemptQuestionOrder(db.Model):
+    __tablename__ = "attempt_question_order"
+
+    __table_args__ = (
+
+        db.UniqueConstraint(
+            "attempt_id",
+            "display_order",
+            name="uq_attempt_display"
+        ),
+
+        db.UniqueConstraint(
+            "attempt_id",
+            "question_id",
+            name="uq_attempt_question"
+        ),
+
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    attempt_id = db.Column(
+        db.Integer,
+        db.ForeignKey("exam_attempts.id"),
+        nullable=False
+    )
+
+    question_id = db.Column(
+        db.Integer,
+        db.ForeignKey("questions.id"),
+        nullable=False
+    )
+
+    display_order = db.Column(
+        db.Integer,
+        nullable=False
+    )
+
+    created_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow
+    )
+
+# ===================================================================
+# ----- FlaskForms --------------------------------------------------
+# ===================================================================
 class LoginForm(FlaskForm):
     username = StringField('Username', validators=[DataRequired()])
     password = PasswordField('Password', validators=[DataRequired()])
@@ -697,6 +748,258 @@ def get_exercise_records(student_id):
 def get_exam_records(student_id):
     pass
 
+# ======================================
+# ===== Get Exam Questions =============
+# ======================================
+def get_exam_questions(exam_id):
+
+    return (
+        Question.query
+        .filter_by(exam_id=exam_id)
+        .order_by(Question.id.asc())
+        .all()
+    )
+
+# ==========================================================
+# LOAD QUESTIONS USING THE STORED RANDOM ORDER
+# ==========================================================
+
+def get_attempt_questions(attempt_id):
+
+    return (
+
+        db.session.query(Question)
+
+        .join(
+            AttemptQuestionOrder,
+            Question.id == AttemptQuestionOrder.question_id
+        )
+
+        .filter(
+            AttemptQuestionOrder.attempt_id == attempt_id
+        )
+
+        .order_by(
+            AttemptQuestionOrder.display_order.asc()
+        )
+
+        .all()
+
+    )
+
+# ======================================
+# ===== Get Total Exam Points ==========
+# ======================================
+def get_total_points(exam_id):
+
+    return sum(
+        question.points
+        for question in get_exam_questions(exam_id)
+    )
+
+# ======================================
+# ===== Get Submitted Attempts =========
+# ======================================
+def get_submitted_attempts(exam_id):
+
+    return (
+        ExamAttempt.query
+        .filter_by(
+            exam_id=exam_id,
+            is_submitted=True
+        )
+        .all()
+    )
+
+# ======================================
+# === Get Latest Submitted Attempts ====
+# ======================================
+def get_latest_submitted_attempts(exam_id):
+
+    attempts = (
+        ExamAttempt.query
+        .filter_by(
+            exam_id=exam_id,
+            is_submitted=True
+        )
+        .order_by(
+            ExamAttempt.student_id,
+            ExamAttempt.id.desc()
+        )
+        .all()
+    )
+
+    latest = {}
+
+    for attempt in attempts:
+
+        if attempt.student_id not in latest:
+            latest[attempt.student_id] = attempt
+
+    return list(latest.values())
+
+# ======================================
+# ===== Get Saved Answer ===============
+# ======================================
+def get_saved_answer(attempt_id, question_id):
+
+    return StudentAnswer.query.filter_by(
+        attempt_id=attempt_id,
+        question_id=question_id
+    ).first()
+
+# ======================================
+# ---- Build Exam Summary ----
+# ======================================
+def build_exam_summary(exam_id):
+
+    accesses = (
+        ExamAccess.query
+        .filter_by(exam_id=exam_id)
+        .filter(
+            ExamAccess.status != "not_requested"
+        )
+        .all()
+    )
+
+    summary = {
+        "requested": len(accesses),
+        "pending": 0,
+        "approved": 0,
+        "completed": 0,
+        "rejected": 0,
+        "forced_submit": 0,
+        "passed": 0,
+        "failed": 0,
+        "average": 0,
+        "highest": 0
+    }
+
+    for access in accesses:
+
+        if access.status in summary:
+            summary[access.status] += 1
+
+    total_points = get_total_points(exam_id)
+
+    attempts = get_latest_submitted_attempts(exam_id)
+
+    percentages = []
+
+    for attempt in attempts:
+
+        if total_points <= 0:
+            continue
+
+        percentage = calculate_percentage(
+            attempt.score,
+            total_points
+        )
+
+        percentages.append(percentage)
+
+        if percentage >= 70:
+            summary["passed"] += 1
+        else:
+            summary["failed"] += 1
+
+    if percentages:
+
+        summary["average"] = round(
+            sum(percentages) / len(percentages),
+            1
+        )
+
+        summary["highest"] = max(percentages)
+
+    return summary
+
+# ======================================
+# ---- Update Exam Access ----
+# ======================================
+
+def update_exam_access(
+    student_id,
+    exam_id,
+    status,
+    extra_data=None
+):
+
+    access = ExamAccess.query.filter_by(
+        student_id=student_id,
+        exam_id=exam_id
+    ).first()
+
+    if not access:
+        return None
+
+    # -----------------------------
+    # Update database
+    # -----------------------------
+    access.status = status
+    db.session.commit()
+
+    # -----------------------------
+    # Build latest summary
+    # -----------------------------
+    summary = build_exam_summary(exam_id)
+
+    # -----------------------------
+    # Build SSE payload
+    # -----------------------------
+    payload = {
+        "access_id": access.id,
+        "student_id": access.student_id,
+        "student_name": access.student.name,
+        "section": access.student.section,
+        "exam_id": access.exam_id,
+        "status": status,
+        "summary": summary
+    }
+
+    # -----------------------------
+    # Merge extra data (optional)
+    # -----------------------------
+    if extra_data:
+        payload.update(extra_data)
+
+    # -----------------------------
+    # Notify Admin Dashboard
+    # -----------------------------
+    send_admin_event(
+        "live_update",
+        payload
+    )
+
+    return access
+
+# =========================================================
+# ---- GET EXAM ACCESS ------------------------------------
+# =========================================================
+
+def get_exam_access(student_id, exam_id):
+
+    return ExamAccess.query.filter_by(
+        student_id=student_id,
+        exam_id=exam_id
+    ).first()
+
+# ======================================
+# ===== Get Latest Attempt ============
+# ======================================
+
+def get_latest_attempt(student_id, exam_id):
+
+    return (
+        ExamAttempt.query
+        .filter_by(
+            student_id=student_id,
+            exam_id=exam_id
+        )
+        .order_by(ExamAttempt.id.desc())
+        .first()
+    )
+
 # =========================================================
 # ---- CENTRAL EXAM GRADING ENGINE ----
 # =========================================================
@@ -773,92 +1076,100 @@ def grade_attempt(attempt, forced=False):
     return score, total_points
 
 # ======================================
-# ---- Update Exam Access ----
+# ---- Send Admin SSE ----
 # ======================================
-def update_exam_access(student_id, exam_id, status):
+def send_admin_event(event, data):
 
-    access = ExamAccess.query.filter_by(
-        student_id=student_id,
-        exam_id=exam_id
-    ).first()
+    if "admin" not in sse_events:
+        sse_events["admin"] = []
 
-    if access:
-        access.status = status
-        db.session.commit()
-
-    return access
+    sse_events["admin"].append({
+        "event": event,
+        "data": data
+    })
 
 # ======================================
-# ---- Build Exam Summary ----
+# ===== Notify Exam Status ============
 # ======================================
 
-def build_exam_summary(exam_id):
+def notify_exam_status(access, status, extra=None):
 
-    accesses = (
-        ExamAccess.query
-        .filter_by(exam_id=exam_id)
-        .filter(
-            ExamAccess.status != "not_requested"
-        )
-        .all()
-    )
-
-    summary = {
-        "requested": len(accesses),
-        "pending": 0,
-        "approved": 0,
-        "completed": 0,
-        "rejected": 0,
-        "forced_submit": 0,
-        "passed": 0,
-        "failed": 0,
-        "average": 0,
-        "highest": 0
+    data = {
+        "access_id": access.id,
+        "student_id": access.student_id,
+        "student_name": access.student.name,
+        "section": access.student.section,
+        "exam_id": access.exam_id,
+        "status": status,
+        "summary": build_exam_summary(access.exam_id)
     }
 
-    for access in accesses:
+    if extra:
+        data.update(extra)
 
-        if access.status in summary:
-            summary[access.status] += 1
-
-    total_points = get_total_points(exam_id)
-
-    attempts = get_submitted_attempts(exam_id)
-
-    percentages = []
-
-    for attempt in attempts:
-
-        if total_points <= 0:
-            continue
-
-        percentage = calculate_percentage(
-            attempt.score,
-            total_points
-        )
-
-        percentages.append(percentage)
-
-        if percentage >= 70:
-            summary["passed"] += 1
-        else:
-            summary["failed"] += 1
-
-    if percentages:
-
-        summary["average"] = round(
-            sum(percentages) / len(percentages),
-            1
-        )
-
-        summary["highest"] = max(percentages)
-
-    return summary
+    send_admin_event(
+        "live_update",
+        data
+    )
 
 # ======================================
-# ---- Build Live Update Payload ----
+# ===== Notify Exam Started ============
+# ======================================
+def notify_exam_started(access):
+
+    notify_exam_status(
+        access,
+        "taking"
+    )
+
+# ======================================
+# ===== Notify Exam Completed ==========
+# ======================================
+def notify_exam_completed(
+    access,
+    attempt,
+    score,
+    total_points
+):
+
+    summary = build_exam_summary(
+        access.exam_id
+    )
+
+    payload = build_live_update_payload(
+        access,
+        attempt,
+        score,
+        total_points,
+        summary,
+        status="completed"
+    )
+
+    send_admin_event(
+        "live_update",
+        payload
+    )
+
+# ======================================
+# ===== Calculate Exam Progress ========
 # ======================================
 
+def calculate_exam_progress(attempt_id, total_questions):
+
+    answers_count = StudentAnswer.query.filter_by(
+        attempt_id=attempt_id
+    ).count()
+
+    if total_questions == 0:
+        return 0
+
+    return int(
+        (answers_count / total_questions) * 100
+    )
+
+# ======================================
+# ---- Build Live Update Payload -------
+# ======================================
 def build_live_update_payload(
     access,
     attempt,
@@ -892,22 +1203,8 @@ def build_live_update_payload(
     }
 
 # ======================================
-# ---- Send Admin SSE ----
+# ----- Clear Exam Session -------------
 # ======================================
-def send_admin_event(event, data):
-
-    if "admin" not in sse_events:
-        sse_events["admin"] = []
-
-    sse_events["admin"].append({
-        "event": event,
-        "data": data
-    })
-
-# ======================================
-# ===== Clear Exam Session =============
-# ======================================
-
 def clear_exam_session():
 
     session.pop("attempt_id", None)
@@ -915,47 +1212,8 @@ def clear_exam_session():
     session.pop("exam_end_time", None)
 
 # ======================================
-# ===== Get Exam Questions =============
+# ----- Calculate Percentage -----------
 # ======================================
-
-def get_exam_questions(exam_id):
-
-    return (
-        Question.query
-        .filter_by(exam_id=exam_id)
-        .order_by(Question.id.asc())
-        .all()
-    )
-
-# ======================================
-# ===== Get Total Exam Points ==========
-# ======================================
-
-def get_total_points(exam_id):
-
-    return sum(
-        question.points
-        for question in get_exam_questions(exam_id)
-    )
-
-# ======================================
-# ===== Get Submitted Attempts =========
-# ======================================
-def get_submitted_attempts(exam_id):
-
-    return (
-        ExamAttempt.query
-        .filter_by(
-            exam_id=exam_id,
-            is_submitted=True
-        )
-        .all()
-    )
-
-# ======================================
-# ===== Calculate Percentage ===========
-# ======================================
-
 def calculate_percentage(score, total_points):
 
     if total_points <= 0:
@@ -989,14 +1247,14 @@ def login_required(role=None):
 SECURITY_EVENTS = {
 
     "TAB_SWITCH": {
-        "penalty": 5,
+        "penalty": 10,
         "severity": "HIGH",
         "source": "Window",
         "description": "Student switched to another browser tab."
     },
 
     "FULLSCREEN_EXIT": {
-        "penalty": 10,
+        "penalty": 1,
         "severity": "CRITICAL",
         "source": "Window",
         "description": "Student exited fullscreen mode."
@@ -1031,21 +1289,21 @@ SECURITY_EVENTS = {
     },
 
     "F12": {
-        "penalty": 3,
+        "penalty": 30,
         "severity": "HIGH",
         "source": "Keyboard",
         "description": "Student attempted to open Developer Tools using F12."
     },
 
     "CTRL_U": {
-        "penalty": 5,
+        "penalty": 20,
         "severity": "HIGH",
         "source": "Keyboard",
         "description": "Student attempted to view the page source using Ctrl+U."
     },
 
     "CTRL_SHIFT_I": {
-        "penalty": 5,
+        "penalty": 30,
         "severity": "HIGH",
         "source": "Keyboard",
         "description": "Student attempted to open Developer Tools using Ctrl+Shift+I."
@@ -1742,6 +2000,33 @@ def edit_question(question_id):
     question = Question.query.get_or_404(question_id)
 
     # =========================
+    # AJAX GET MODE
+    # =========================
+    if request.method == "GET" and request.headers.get("X-Requested-With") == "XMLHttpRequest":
+
+        return jsonify({
+
+            "id": question.id,
+
+            "question_text": question.question_text,
+
+            "choice_a": question.choice_a,
+
+            "choice_b": question.choice_b,
+
+            "choice_c": question.choice_c,
+
+            "choice_d": question.choice_d,
+
+            "correct_answer": question.correct_answer,
+
+            "points": question.points,
+
+            "question_type": question.question_type
+
+        })
+
+    # =========================
     # AJAX MODE (NEW)
     # =========================
     if request.method == 'POST' and request.is_json:
@@ -1779,7 +2064,9 @@ def edit_question(question_id):
 
         return redirect(url_for('add_question', exam_id=question.exam_id))
 
-    return render_template('edit_question.html', question=question)
+    return jsonify({
+    "message": "Use AJAX to edit questions."
+})
 
 @app.route('/delete-question/<int:question_id>', methods=['POST'])
 @login_required(role=['Admin', 'Instructor'])
@@ -1987,15 +2274,14 @@ def start_exam(exam_id):
         return redirect(url_for('login'))
 
     # 1. Check access
-    access = ExamAccess.query.filter_by(
-        student_id=student_id,
-        exam_id=exam_id,
-        status='approved'
-    ).first()
+    access = get_exam_access(
+        student_id,
+        exam_id
+    )
 
-    if not access:
+    if not access or access.status != "approved":
         flash("You are not allowed to take this exam.", "danger")
-        return redirect(url_for('dashboard_student'))
+        return redirect(url_for("dashboard_student"))
 
     # 2. Check exam
     exam = Exam.query.get_or_404(exam_id)
@@ -2046,26 +2332,42 @@ def start_exam(exam_id):
 
         db.session.commit()
 
+        # ==========================================
+        # CREATE RANDOM QUESTION ORDER
+        # (Only once per exam attempt)
+        # ==========================================
+
+        questions = Question.query.filter_by(
+            exam_id=exam.id
+        ).all()
+
+        random.shuffle(questions)
+
+        for index, question in enumerate(questions):
+
+            db.session.add(
+
+                AttemptQuestionOrder(
+
+                    attempt_id=attempt.id,
+
+                    question_id=question.id,
+
+                    display_order=index + 1
+
+                )
+
+            )
+
+        db.session.commit()
+
     # 7. Store session state
     session['attempt_id'] = attempt.id
 
     # ==============================
     # Notify Admin: Student Started Exam
     # ==============================
-    if "admin" not in sse_events:
-        sse_events["admin"] = []
-
-    sse_events["admin"].append({
-        "event": "live_update",
-        "data": {
-            "access_id": access.id,
-            "student_id": student_id,
-            "student_name": access.student.name,
-            "section": access.student.section,
-            "exam_id": exam.id,
-            "status": "taking"
-        }
-    })
+    notify_exam_started(access)
 
     return redirect(url_for(
         'take_exam',
@@ -2446,11 +2748,17 @@ def take_exam(exam_id, question_id):
 
     exam = Exam.query.get_or_404(exam_id)
 
-    questions = get_exam_questions(exam_id)
+    # ==========================================
+    # LOAD RANDOMIZED QUESTION ORDER
+    # ==========================================
+
+    questions = get_attempt_questions(attempt.id)
 
     if not questions:
+
         flash("No questions found.", "danger")
-        return redirect(url_for('dashboard_student'))
+
+        return redirect(url_for("dashboard_student"))
 
     # 1. Find index ONCE
     current_index = next(
@@ -2466,19 +2774,18 @@ def take_exam(exam_id, question_id):
     next_question = questions[current_index + 1] if current_index + 1 < len(questions) else None
 
     # Get student's previously selected answer (if any)
-    saved_answer = StudentAnswer.query.filter_by(
-        attempt_id=attempt_id,
-        question_id=current_question.id
-    ).first()
+    saved_answer = get_saved_answer(
+        attempt_id,
+        current_question.id
+    )
 
     # 4. REAL progress (DB-based)
-    answers_count = StudentAnswer.query.filter_by(
-        attempt_id=attempt_id
-    ).count()
-
     total_questions = len(questions)
 
-    answer_progress = int((answers_count / total_questions) * 100) if total_questions else 0
+    answer_progress = calculate_exam_progress(
+        attempt_id,
+        total_questions
+    )
 
     return render_template(
         "take_exam.html",
@@ -2647,7 +2954,14 @@ def submit_exam(exam_id):
     access = update_exam_access(
         student_id,
         exam_id,
-        "completed"
+        "completed",
+        {
+            "score": score,
+            "total_points": total_points,
+            "submitted_at": (
+                attempt.submitted_at + timedelta(hours=8)
+            ).strftime("%Y-%m-%d %I:%M %p")
+        }
     )
 
     # ==============================
@@ -2661,18 +2975,12 @@ def submit_exam(exam_id):
 
         summary = build_exam_summary(exam_id)
 
-        payload = build_live_update_payload(
-            access,
-            attempt,
-            score,
-            total_points,
-            summary
-        )
-
-        send_admin_event(
-            "live_update",
-            payload
-        )
+#        notify_exam_completed(
+#            access,
+#            attempt,
+#            score,
+#            total_points
+#        )
 
     # 8. Clean session safely
     clear_exam_session()
@@ -2703,7 +3011,7 @@ def review_answers(exam_id):
     # Load all questions in this exam
     # ==========================================================
 
-    questions = get_exam_questions(exam_id)
+    questions = get_attempt_questions(attempt_id)
 
     # ==========================================================
     # Load student's saved answers
@@ -2820,6 +3128,13 @@ def log_security_event():
     # ----------------------------------------------------------
 
     attempt.security_score -= config["penalty"]
+
+    print("=" * 50)
+    print("SECURITY EVENT:", event)
+    print("Penalty:", config["penalty"])
+    print("Remaining Security Score:", attempt.security_score)
+    print("=" * 50)
+
     attempt.total_violations += 1
     attempt.last_violation = datetime.utcnow()
     attempt.last_violation_type = event
@@ -2829,16 +3144,53 @@ def log_security_event():
 
     db.session.commit()
 
-#    force_submit = attempt.tab_switches >= 20
+    # ==========================================================
+    # SECURITY THRESHOLD ENGINE
+    # ==========================================================
+
+    warning = None
     force_submit = False
+
+    # -------------------------
+    # Forced Submission
+    # -------------------------
+    if attempt.security_score <= 0:
+
+        attempt.security_score = 0
+
+        warning = "forced"
+
+        force_submit = True
+
+    # -------------------------
+    # Critical Warning
+    # -------------------------
+    elif attempt.security_score <= 40:
+
+        warning = "critical"
+
+    # -------------------------
+    # Warning
+    # -------------------------
+    elif attempt.security_score <= 70:
+
+        warning = "warning"
+
+    # ==========================================================
+    # RESPONSE
+    # ==========================================================
 
     return jsonify({
 
         "success": True,
-        "force_submit": force_submit,
-        "security_score": attempt.security_score
 
-    })
+        "security_score": attempt.security_score,
+
+        "warning": warning,
+
+        "force_submit": force_submit
+
+})
 
 # =========================================================
 # 6. 👨‍🏫 ADMIN EXAM CONTROL
@@ -3129,6 +3481,305 @@ def reset_exam():
         "success": True,
         "message": "Exam has been reset. Student can request again."
     })
+
+# =========================================================
+# ===== REVIEW STUDENT ATTEMPT ============================
+# =========================================================
+@app.route('/review-attempt/<int:exam_id>/<student_id>')
+@login_required(role=['Admin', 'Instructor'])
+def review_attempt(exam_id, student_id):
+
+    return f"""
+    <h2>Review Attempt</h2>
+
+    <p>Exam ID: {exam_id}</p>
+
+    <p>Student ID: {student_id}</p>
+    """
+
+# =========================================================
+# ===== REVIEW ATTEMPT DATA ===============================
+# =========================================================
+@app.route('/review-attempt-data/<int:exam_id>/<student_id>')
+@login_required(role=['Admin', 'Instructor'])
+def review_attempt_data(exam_id, student_id):
+
+    student = Student.query.filter_by(
+        student_id=student_id
+    ).first_or_404()
+
+    exam = Exam.query.get_or_404(exam_id)
+
+    attempt = (
+        ExamAttempt.query
+        .filter_by(
+            student_id=student_id,
+            exam_id=exam_id
+        )
+        .order_by(
+            ExamAttempt.id.desc()
+        )
+        .first()
+    )
+
+    answers = []
+
+    if attempt:
+
+        answers = (
+            StudentAnswer.query
+            .filter_by(
+                attempt_id=attempt.id
+            )
+            .all()
+        )
+
+        questions = (
+            Question.query
+            .filter_by(exam_id=exam_id)
+            .order_by(Question.id.asc())
+            .all()
+        )
+
+        answer_map = {
+            answer.question_id: answer
+            for answer in answers
+        }
+
+        review_questions = []
+
+        for index, question in enumerate(questions, start=1):
+
+            answer = answer_map.get(question.id)
+
+            student_answer = ""
+
+            if answer:
+                student_answer = answer.selected_answer or ""
+
+            review_questions.append({
+
+                "number": index,
+
+                "question_id": question.id,
+
+                "question": question.question_text,
+
+                "student_answer": student_answer,
+
+                "correct_answer": question.correct_answer,
+
+                "points": question.points,
+
+                "answered": bool(student_answer),
+
+                "is_correct": (
+                    answer.is_correct
+                    if answer
+                    else False
+                )
+
+            })
+
+    total_questions = len(review_questions)
+
+    answered_questions = sum(
+        1
+        for q in review_questions
+        if q["answered"]
+    )
+
+    correct_answers = sum(
+        1
+        for q in review_questions
+        if q["is_correct"]
+    )
+
+    wrong_answers = sum(
+        1
+        for q in review_questions
+        if q["answered"] and not q["is_correct"]
+    )
+
+    unanswered_questions = (
+        total_questions - answered_questions
+    )
+
+    progress = (
+        round(
+            (answered_questions / total_questions) * 100
+        )
+        if total_questions
+        else 0
+    )
+
+    return jsonify({
+
+        "student_name": student.name,
+
+        "student_id": student.student_id,
+
+        "section": student.section,
+
+        "subject": exam.subject.subject_code
+                   if exam.subject else "",
+
+        "exam_title": exam.title,
+
+        "exam_type": exam.exam_type,
+
+        "answers_count": len(answers),
+
+        "questions": review_questions,
+
+        "progress": {
+
+            "percent": progress,
+
+            "answered": answered_questions,
+
+            "correct": correct_answers,
+
+            "wrong": wrong_answers,
+
+            "unanswered": unanswered_questions,
+
+            "total": total_questions
+
+        }
+
+    })
+
+# =========================================================
+# ===== FULL REVIEW PAGE ==================================
+# =========================================================
+
+@app.route('/review-report/<int:exam_id>/<student_id>')
+@login_required(role=['Admin', 'Instructor'])
+def review_report(exam_id, student_id):
+
+    student = Student.query.filter_by(
+        student_id=student_id
+    ).first_or_404()
+
+    exam = Exam.query.get_or_404(exam_id)
+
+    attempt = (
+        ExamAttempt.query
+        .filter_by(
+            student_id=student_id,
+            exam_id=exam_id
+        )
+        .order_by(
+            ExamAttempt.id.desc()
+        )
+        .first()
+    )
+
+    questions = (
+        Question.query
+        .filter_by(exam_id=exam_id)
+        .all()
+    )
+
+    answers = []
+
+    if attempt:
+
+        answers = (
+            StudentAnswer.query
+            .filter_by(
+                attempt_id=attempt.id
+            )
+            .all()
+        )
+
+    answer_map = {
+        answer.question_id: answer
+        for answer in answers
+    }
+
+    question_review = []
+
+    for index, question in enumerate(questions, start=1):
+
+        answer = answer_map.get(question.id)
+
+        student_answer = ""
+
+        if answer:
+            student_answer = answer.selected_answer or ""
+
+        question_review.append({
+
+            "number": index,
+
+            "question": question.question_text,
+
+            "student_answer": student_answer,
+
+            "correct_answer": question.correct_answer,
+
+            "answered": bool(student_answer),
+
+            "is_correct": (
+                answer.is_correct
+                if answer
+                else False
+            ),
+
+            "points": question.points,
+
+            "earned_points": (
+                question.points
+                if answer and answer.is_correct
+                else 0
+            )
+
+        })
+
+    total_questions = len(questions)
+
+    answered = len(answer_map)
+
+    correct = sum(
+        1
+        for answer in answers
+        if answer.is_correct
+    )
+
+    wrong = answered - correct
+
+    unanswered = total_questions - answered
+
+    progress = (
+        round(answered / total_questions * 100)
+        if total_questions
+        else 0
+    )
+
+    return render_template(
+        "review_report.html",
+
+        student=student,
+
+        exam=exam,
+
+        attempt=attempt,
+
+        progress=progress,
+
+        answered=answered,
+
+        correct=correct,
+
+        wrong=wrong,
+
+        unanswered=unanswered,
+
+        question_review=question_review
+
+    )
 
 # =========================
 # SSE ROUTE

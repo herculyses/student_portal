@@ -49,6 +49,7 @@ const Exam = {
 
     // Prevent multiple submissions
     isSubmitting: false,
+    securityModalShown: false,
 
     // ========================================================
     // Initialize the Exam Engine
@@ -904,19 +905,57 @@ const Exam = {
 
                 console.log(data);
 
-                if (data.force_submit) {
+                // ------------------------------------
+                // Update Security Thresholds
+                // ------------------------------------
 
-                    alert("Too many security violations.\nYour exam will now be submitted.");
+                Exam.security.updateSecurityStatus(data);
 
-                    Exam.submit.finish(true);
+            } catch (error) {
 
-                }
+                console.error(error);
 
             }
 
-            catch(error){
+        },   // ← THIS COMMA WAS MISSING
 
-                console.error(error);
+        updateSecurityStatus(data) {
+
+            // -----------------------------
+            // Update Progress Bar (future)
+            // -----------------------------
+            const score = data.security_score;
+
+            console.log("Security Score:", score);
+
+            // -----------------------------
+            // Warning (70)
+            // -----------------------------
+            if (data.warning === "warning") {
+
+                Exam.toast.show(
+                    "⚠ Warning: You have consumed 30 security points."
+                );
+
+            }
+
+            // -----------------------------
+            // Critical (40)
+            // -----------------------------
+            else if (data.warning === "critical") {
+
+                Exam.toast.show(
+                    "🚨 Critical Warning: Further violations may automatically submit your exam."
+                );
+
+            }
+
+            // -----------------------------
+            // Forced Submission
+            // -----------------------------
+            if (data.force_submit) {
+
+                Exam.modal.showSecurityViolation();
 
             }
 
@@ -952,12 +991,143 @@ const Exam = {
     },
 
     // ========================================================
+    // Security Modal Module
+    // ========================================================
+
+    modal: {
+
+        showSecurityViolation() {
+
+            // Prevent opening multiple security modals
+            if (Exam.securityModalShown) {
+                return;
+            }
+
+            Exam.securityModalShown = true;
+
+            const modal = new bootstrap.Modal(
+
+                document.getElementById(
+                    "securityViolationModal"
+                )
+
+            );
+
+            modal.show();
+
+            document
+                .getElementById("securityReturnBtn")
+                .onclick = function () {
+
+                    console.log("BUTTON CLICKED");
+
+                    Exam.submit.finish(true);
+
+                };
+
+        }
+
+    },
+
+    // ========================================================
     // Submit Exam Module
     // ========================================================
 
     submit: {
 
         finish(auto = false) {
+
+            // Forced submission
+            if (auto) {
+
+                window.location.href = submitExamURL;
+
+                return;
+
+            }
+
+            Exam.submit.showFinishModal();
+
+        },
+
+        // ==========================================
+        // Open Finish Exam Modal
+        // ==========================================
+
+        showFinishModal() {
+
+            const modal = new bootstrap.Modal(
+
+                document.getElementById(
+                    "finishExamModal"
+                )
+
+            );
+
+            modal.show();
+
+            Exam.submit.loadSummary();
+
+        },
+
+        // ==========================================
+        // Load Exam Summary
+        // ==========================================
+
+        async loadSummary() {
+
+            try {
+
+                const response = await fetch(reviewAnswersURL);
+
+                const reviewData = await response.json();
+
+                const answered =
+                    reviewData.filter(q => q.answered).length;
+
+                const total = reviewData.length;
+
+                const remaining = total - answered;
+
+                const percent =
+                    Math.round((answered / total) * 100);
+
+                document.getElementById(
+                    "finishExamSummary"
+                ).innerHTML = `
+
+                    <p>
+                        <strong>Answered:</strong>
+                        ${answered}
+                    </p>
+
+                    <p>
+                        <strong>Remaining:</strong>
+                        ${remaining}
+                    </p>
+
+                    <p>
+                        <strong>Completion:</strong>
+                        ${percent}%
+                    </p>
+
+                `;
+
+            }
+
+            catch(error){
+
+                console.error(error);
+
+            }
+
+        },
+
+        // ==========================================
+        // Final Submission
+        // ==========================================
+
+        confirmFinish() {
 
             if (Exam.isSubmitting) {
 
@@ -966,16 +1136,6 @@ const Exam = {
             }
 
             Exam.isSubmitting = true;
-
-            if (!auto) {
-
-                if (!confirm("Are you sure you want to submit your exam?")) {
-
-                    return;
-
-                }
-
-            }
 
             window.location.href = submitExamURL;
 

@@ -390,14 +390,27 @@ if (localStorage.getItem("darkMode") === "true") {
                                         </button>
                                     </div>
                                 {% elif access and access.status in ["approved", "completed", "rejected", "forced_submit"] %}
-                                    <button
-                                        class="btn btn-outline-warning btn-sm"
-                                        onclick="recycleExam(
-                                            {{ exam.id }},
-                                            '{{ student.student_id }}'
-                                        )">
-                                        ♻ Reset
-                                    </button>
+                                    <div class="d-flex justify-content-center gap-2">
+
+                                        <button
+                                            class="btn btn-outline-primary btn-sm"
+                                            onclick="reviewAttempt(
+                                                {{ exam.id }},
+                                                '{{ student.student_id }}'
+                                            )">
+                                            👁 Review
+                                        </button>
+
+                                        <button
+                                            class="btn btn-outline-warning btn-sm"
+                                            onclick="recycleExam(
+                                                {{ exam.id }},
+                                                '{{ student.student_id }}'
+                                            )">
+                                            ♻ Reset
+                                        </button>
+
+                                    </div>
                                 {% else %}
                                     <span class="text-muted">—</span>
                                 {% endif %}
@@ -414,7 +427,10 @@ if (localStorage.getItem("darkMode") === "true") {
         <div class="alert alert-info">No exams found.</div>
     {% endfor %}
 </div>
-<!-- DELETE MODAL -->
+
+<!-- ============================================ -->
+<!-- ========= DELETE MODAL ======================-->
+<!-- ============================================ -->
 <div class="modal fade" id="deleteModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
@@ -441,7 +457,10 @@ if (localStorage.getItem("darkMode") === "true") {
     </div>
   </div>
 </div>
-<!-- CREATE EXAM MODAL -->
+
+<!-- ============================================ -->
+<!-- ========= CREATE EXAM MODAL =================-->
+<!-- ============================================ -->
 <div class="modal fade" id="createExamModal" tabindex="-1">
   <div class="modal-dialog">
     <div class="modal-content">
@@ -637,7 +656,119 @@ if (localStorage.getItem("darkMode") === "true") {
   </div>
 </div>
 
-<!-- SCRIPTS -->
+<!-- ============================================ -->
+<!-- ========= Instructor Review Modal ========== -->
+<!-- ============================================ -->
+<div
+    class="modal fade"
+    id="reviewModal"
+    tabindex="-1"
+    aria-labelledby="reviewModalLabel"
+    aria-hidden="true">
+
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+
+        <div class="modal-content">
+
+            <div class="modal-header">
+
+                <h5
+                    class="modal-title"
+                    id="reviewModalLabel">
+
+                    👁 Student Exam Review
+
+                </h5>
+
+                <button
+                    type="button"
+                    class="btn-close"
+                    data-bs-dismiss="modal">
+                </button>
+
+            </div>
+
+            <div class="modal-body">
+
+                <!-- ============================= -->
+                <!-- Student Information -->
+                <!-- ============================= -->
+
+                <div id="reviewStudentInfo">
+
+                    Loading student information...
+
+                </div>
+
+                <hr>
+
+                <!-- ============================= -->
+                <!-- Progress -->
+                <!-- ============================= -->
+
+                <div id="reviewProgress">
+
+                </div>
+
+                <hr>
+
+                <!-- ============================= -->
+                <!-- Statistics -->
+                <!-- ============================= -->
+
+                <div id="reviewStatistics">
+
+                </div>
+
+                <hr>
+
+                <!-- ============================= -->
+                <!-- Questions -->
+                <!-- ============================= -->
+
+                <div id="reviewQuestions">
+
+                </div>
+
+            </div>
+
+            <div class="modal-footer">
+
+                <button
+                    id="reviewFullReportBtn"
+                    class="btn btn-outline-primary">
+
+                    📊 Full Report
+
+                </button>
+
+                <button
+                    class="btn btn-success">
+
+                    📤 Export Excel
+
+                </button>
+
+                <button
+                    type="button"
+                    class="btn btn-secondary"
+                    data-bs-dismiss="modal">
+
+                    Close
+
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<!-- ============================================ -->
+<!-- ================= SCRIPTS ================== -->
+<!-- ============================================ -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
@@ -870,6 +1001,14 @@ function updateStudentAccess(studentId, examId, status) {
         `;
 
         actionBox.innerHTML = `
+            <button
+                class="btn btn-outline-primary btn-sm me-1"
+                onclick="reviewAttempt(${examId}, '${studentId}')">
+
+                👁 Review
+
+            </button>
+
             <button
                 class="btn btn-outline-warning btn-sm"
                 onclick="recycleExam(${examId}, '${studentId}')">
@@ -1353,6 +1492,265 @@ function recycleExam(examId, studentId) {
         new bootstrap.Toast(toastElement).show();
 
     });
+
+}
+
+// ============================================
+// =========👇 Review Student Attempt==========
+// ============================================
+function reviewAttempt(examId, studentId) {
+
+    console.log("👁 Review Requested");
+
+    console.table({
+        examId,
+        studentId
+    });
+
+    const fullReportButton = document.getElementById(
+        "reviewFullReportBtn"
+    );
+
+    fullReportButton.onclick = function () {
+
+        window.location.href =
+            `/review-report/${examId}/${studentId}`;
+
+    };
+
+    const modal = new bootstrap.Modal(
+        document.getElementById("reviewModal")
+    );
+
+    document.getElementById("reviewStudentInfo").innerHTML =
+        "<h5>Loading...</h5>";
+
+    document.getElementById("reviewProgress").innerHTML = "";
+
+    document.getElementById("reviewStatistics").innerHTML = "";
+
+    document.getElementById("reviewQuestions").innerHTML = "";
+
+    modal.show();
+
+    fetch(`/review-attempt-data/${examId}/${studentId}`)
+
+        .then(response => response.json())
+
+        .then(data => {
+
+            console.log("📚 Review Data");
+
+            console.log(data);
+
+            document.getElementById("reviewStudentInfo").innerHTML = `
+
+                <div class="card border-0 shadow-sm">
+
+                    <div class="card-body">
+
+                        <h5 class="mb-3">
+                            👤 Student Information
+                        </h5>
+
+                        <div class="row">
+
+                            <div class="col-md-6">
+
+                                <strong>Name</strong><br>
+                                ${data.student_name}
+
+                            </div>
+
+                            <div class="col-md-6">
+
+                                <strong>Student Number</strong><br>
+                                ${data.student_id}
+
+                            </div>
+
+                        </div>
+
+                        <hr>
+
+                        <div class="row">
+
+                            <div class="col-md-4">
+
+                                <strong>Section</strong><br>
+                                ${data.section}
+
+                            </div>
+
+                            <div class="col-md-4">
+
+                                <strong>Subject</strong><br>
+                                ${data.subject}
+
+                            </div>
+
+                            <div class="col-md-4">
+
+                                <strong>Exam Type</strong><br>
+                                ${data.exam_type}
+
+                            </div>
+
+                        </div>
+
+                        <hr>
+
+                        <strong>Exam</strong><br>
+
+                        ${data.exam_title}
+
+                    </div>
+
+                </div>
+
+            `;
+
+            let progressColor = "bg-danger";
+
+            if (data.progress.percent >= 70) {
+
+                progressColor = "bg-success";
+
+            }
+            else if (data.progress.percent >= 40) {
+
+                progressColor = "bg-warning";
+
+            }
+
+            document.getElementById("reviewProgress").innerHTML = `
+
+            <div class="card border-0 shadow-sm mb-3">
+
+                <div class="card-body">
+
+                    <h5 class="mb-3">
+                        📊 Exam Progress
+                    </h5>
+
+                    <div class="progress mb-3" style="height:22px;">
+
+                        <div
+                            class="progress-bar ${progressColor}"
+                            role="progressbar"
+                            style="width:${data.progress.percent}%">
+
+                            ${data.progress.percent}%
+
+                        </div>
+
+                    </div>
+
+                    <div class="row text-center">
+
+                        <div class="col">
+
+                            <strong>${data.progress.answered}</strong>
+
+                            <br>
+
+                            <small>Answered</small>
+
+                        </div>
+
+                        <div class="col">
+
+                            <strong>${data.progress.correct}</strong>
+
+                            <br>
+
+                            <small>Correct</small>
+
+                        </div>
+
+                        <div class="col">
+
+                            <strong>${data.progress.wrong}</strong>
+
+                            <br>
+
+                            <small>Wrong</small>
+
+                        </div>
+
+                        <div class="col">
+
+                            <strong>${data.progress.unanswered}</strong>
+
+                            <br>
+
+                            <small>Unanswered</small>
+
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            `;
+
+            const questionsContainer = document.getElementById(
+                "reviewQuestions"
+            );
+
+            questionsContainer.innerHTML = "";
+
+            data.questions.forEach(q => {
+
+                let badge = "⚪";
+                let color = "secondary";
+                let answer = "Unanswered";
+
+                if (q.answered) {
+
+                    answer = q.student_answer;
+
+                    if (q.is_correct) {
+                        badge = "🟢";
+                        color = "success";
+                    }
+                    else {
+                        badge = "🔴";
+                        color = "danger";
+                    }
+
+                }
+
+                questionsContainer.innerHTML += `
+
+                <div class="border rounded px-3 py-2 mb-2">
+
+                    <div class="d-flex justify-content-between align-items-center">
+
+                        <span class="fw-bold text-${color}">
+
+                            ${badge}
+                            Question ${q.number}
+
+                        </span>
+
+                        <span class="fw-semibold">
+
+                            ${answer}
+
+                        </span>
+
+                    </div>
+
+                </div>
+
+                `;
+
+            });
+
+        });
 
 }
 </script>
