@@ -1829,7 +1829,7 @@ def view_exams():
 
                 summary["highest"] = max(percentages)
 
-            exam_summary[exam.id] = summary
+        exam_summary[exam.id] = summary
 
         print("\n==============================")
         print(f"Exam ID: {exam.id}")
