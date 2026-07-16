@@ -1562,7 +1562,6 @@ def dashboard_student():
             "result": result,
             "submitted_at": attempt.submitted_at
     })
-
     return render_template(
         "dashboard_student.html",
         student=student,
