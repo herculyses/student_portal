@@ -1490,12 +1490,15 @@ def dashboard_student():
 
     grades = Student.query.filter_by(student_id=student.student_id).all()
 
-    # ALL ACTIVE EXAMS
-    exams = Exam.query.filter_by(is_active=True).all()
+    # ALL ACTIVE EXAMS (for Available Exams)
+    active_exams = Exam.query.filter_by(is_active=True).all()
+
+    # ALL EXAMS (for Examination Results)
+    all_exams = Exam.query.all()
 
     allowed_exams = []
 
-    for exam in exams:
+    for exam in active_exams:
 
         access = ExamAccess.query.filter_by(
             student_id=student.student_id,
@@ -1514,13 +1517,60 @@ def dashboard_student():
             "question_count": len(exam.questions)
         })
 
+    exam_results = []
+
+    for exam in all_exams:
+
+        attempt = (
+            ExamAttempt.query
+            .filter_by(
+                student_id=student.student_id,
+                exam_id=exam.id,
+                is_submitted=True
+            )
+            .order_by(ExamAttempt.id.desc())
+            .first()
+        )
+
+        if not attempt:
+            continue
+
+        total_points = sum(
+            question.points
+            for question in exam.questions
+        )
+
+        percentage = (
+            round((attempt.score / total_points) * 100)
+            if total_points > 0
+            else 0
+        )
+
+        if percentage >= 85:
+            result = "Excellent"
+        elif percentage >= 70:
+            result = "Passed"
+        else:
+            result = "Failed"
+
+        exam_results.append({
+            "title": exam.title,
+            "subject": exam.subject,
+            "score": attempt.score,
+            "total_points": total_points,
+            "percentage": percentage,
+            "result": result,
+            "submitted_at": attempt.submitted_at
+    })
+
     return render_template(
         "dashboard_student.html",
         student=student,
         student_name=student_name,
         role=role,
         allowed_exams=allowed_exams,
-        grades=grades
+        grades=grades,
+        exam_results=exam_results
     )
 
 # =========================
