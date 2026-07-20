@@ -1576,8 +1576,13 @@ def dashboard_student():
             "total_points": total_points,
             "percentage": percentage,
             "result": result,
-            "submitted_at": attempt.submitted_at
+            "submitted_at": (
+                attempt.submitted_at + timedelta(hours=8)
+                if attempt.submitted_at
+                else None
+            )
     })
+
     return render_template(
         "dashboard_student.html",
         student=student,
