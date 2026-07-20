@@ -1505,6 +1505,14 @@ def dashboard_student():
             exam_id=exam.id
         ).first()
 
+        if access:
+            print("=" * 50)
+            print("DASHBOARD STATUS CHECK")
+            print("Exam:", exam.id)
+            print("Status:", access.status)
+            print("Reset:", access.is_reset)
+            print("=" * 50)
+
         allowed_exams.append({
             "id": exam.id,
             "title": exam.title,
@@ -1520,6 +1528,14 @@ def dashboard_student():
     exam_results = []
 
     for exam in all_exams:
+
+        access = ExamAccess.query.filter_by(
+            student_id=student.student_id,
+            exam_id=exam.id
+        ).first()
+
+        if access and access.status == "not_requested":
+            continue
 
         attempt = (
             ExamAttempt.query
@@ -2328,7 +2344,16 @@ def start_exam(exam_id):
         exam_id
     )
 
-    if not access or access.status != "approved":
+    if not access:
+        flash("You are not allowed to take this exam.", "danger")
+        return redirect(url_for("dashboard_student"))
+
+    # ----------------------------------------
+    # Normal students must be approved.
+    # Reset students are allowed to continue.
+    # ----------------------------------------
+
+    if access.status != "approved" and not access.is_reset:
         flash("You are not allowed to take this exam.", "danger")
         return redirect(url_for("dashboard_student"))
 
@@ -2353,6 +2378,13 @@ def start_exam(exam_id):
         student_id=student_id,
         exam_id=exam_id
     ).order_by(ExamAttempt.id.desc()).first()
+
+    print("=" * 50)
+    print("RESET DEBUG")
+    print("Attempt Submitted:", attempt.is_submitted if attempt else None)
+    print("Access Status:", access.status)
+    print("Access Reset:", access.is_reset)
+    print("=" * 50)
 
     # 5. If already submitted → block
     if attempt and attempt.is_submitted and not access.is_reset:
@@ -2839,6 +2871,7 @@ def take_exam(exam_id, question_id):
     return render_template(
         "take_exam.html",
         exam=exam,
+        student_id=student_id,
         question=current_question,
         current_index=current_index + 1,
         total=total_questions,
@@ -3439,6 +3472,13 @@ def student_exam_status():
 
     for access in accesses:
 
+        print("=" * 70)
+        print("ROW ID:", access.id)
+        print("Exam:", access.exam_id)
+        print("Student:", access.student_id)
+        print("Status:", access.status)
+        print("=" * 70)
+
         exam = Exam.query.get(access.exam_id)
 
         result.append({
@@ -3520,15 +3560,146 @@ def reset_exam():
             "message": "Exam access not found."
         })
 
-    access.status = "not_requested"
+    access.status = "approved"
     access.is_reset = True
     access.reset_at = datetime.utcnow()
 
+    attempt = get_latest_attempt(student_id, exam_id)
+
+    if attempt:
+
+        # ------------------------------------
+        # Reset security state
+        # ------------------------------------
+        attempt.security_score = 100
+        attempt.total_violations = 0
+        attempt.last_violation = None
+        attempt.last_violation_type = None
+
     db.session.commit()
+
+    access = ExamAccess.query.filter_by(
+        exam_id=exam_id,
+        student_id=student_id
+    ).first()
+
+    print("=" * 50)
+    print("AFTER RESET")
+    print("Status:", access.status)
+    print("is_reset:", access.is_reset)
+    print("reset_at:", access.reset_at)
+    print("=" * 50)
 
     return jsonify({
         "success": True,
-        "message": "Exam has been reset. Student can request again."
+        "message": "Exam has been reset. Student may immediately retake the exam."
+    })
+
+# =========================
+# FORCE SUBMIT ROUTE
+# =========================
+
+@app.route("/force-submit", methods=["POST"])
+@login_required(role=["Admin"])
+def force_submit():
+
+    data = request.get_json()
+
+    exam_id = data.get("exam_id")
+    student_id = data.get("student_id")
+
+    print("=" * 60)
+    print("FORCE SUBMIT REQUEST RECEIVED")
+    print("Exam ID:", exam_id)
+    print("Student ID:", student_id)
+    print("=" * 60)
+
+    # ------------------------------------
+    # Find latest attempt
+    # ------------------------------------
+
+    attempt = get_latest_attempt(
+        student_id,
+        exam_id
+    )
+
+    if not attempt or attempt.is_submitted:
+
+        return jsonify({
+            "success": False,
+            "message": "No active exam attempt found."
+        })
+
+    # ------------------------------------
+    # Grade current answers
+    # ------------------------------------
+
+    score, total_points = grade_attempt(attempt)
+
+    db.session.commit()
+
+    # ------------------------------------
+    # Update Exam Access
+    # ------------------------------------
+
+    update_exam_access(
+        student_id,
+        exam_id,
+        "forced_submit",
+        {
+            "score": score,
+            "total_points": total_points,
+            "submitted_at": (
+                attempt.submitted_at + timedelta(hours=8)
+            ).strftime("%Y-%m-%d %I:%M %p")
+        }
+    )
+
+    access = get_exam_access(
+        student_id,
+        exam_id
+    )
+
+    print("=" * 60)
+    print("AFTER FORCE SUBMIT")
+    print("Student:", student_id)
+    print("Exam:", exam_id)
+    print("Access Status:", access.status)
+    print("Reset Flag:", access.is_reset)
+    print("=" * 60)
+
+    # ------------------------------------
+    # Notify Student (SSE)
+    # ------------------------------------
+
+    if str(student_id) not in sse_events:
+        sse_events[str(student_id)] = []
+
+    sse_events[str(student_id)].append({
+
+        "event": "force_submit",
+
+        "data": {
+
+            "exam_id": exam_id,
+
+            "message": "Your examination has been force submitted by your instructor."
+
+        }
+
+    })
+
+    print("CURRENT SSE DICTIONARY")
+    print(sse_events)
+    print("QUEUE FOR STUDENT")
+    print(sse_events.get(str(student_id)))
+    print("Queue after append:")
+    print(sse_events)
+    print("🔥 FORCE SUBMIT EVENT SENT TO STUDENT:", student_id)
+
+    return jsonify({
+        "success": True,
+        "message": "Student has been force submitted."
     })
 
 # =========================================================
@@ -3848,8 +4019,16 @@ def stream(user_id):
                 print(f"➡ Sending to {user_id}: {event}")
                 print("QUEUE LENGTH AFTER POP:", len(sse_events[user_id]))
 
-                yield f"event: {event['event']}\n"
-                yield f"data: {json.dumps(event['data'])}\n\n"
+                yield (
+                    f"event: {event['event']}\n"
+                    f"data: {json.dumps(event['data'])}\n\n"
+                )
+
+                print("===== SENDING RAW SSE =====")
+                print(
+                    f"event: {event['event']}\n"
+                    f"data: {json.dumps(event['data'])}\n"
+                )
 
             else:
                 # heartbeat

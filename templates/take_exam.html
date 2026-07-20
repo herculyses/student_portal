@@ -147,7 +147,9 @@ body{
 
 </head>
 
-<body class="bg-light">
+<body
+    class="bg-light"
+    data-student-id="{{ student_id }}">
 
 <div class="container py-4">
 
@@ -496,6 +498,54 @@ body{
                 <button
                     id="securityReturnBtn"
                     class="btn btn-danger">
+
+                    Return to Dashboard
+
+                </button>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<div class="modal fade"
+     id="forceSubmitModal"
+     tabindex="-1"
+     data-bs-backdrop="static"
+     data-bs-keyboard="false">
+
+    <div class="modal-dialog modal-dialog-centered">
+
+        <div class="modal-content">
+
+            <div class="modal-header bg-danger text-white">
+
+                <h5 class="modal-title">
+                    Examination Force Submitted
+                </h5>
+
+            </div>
+
+            <div class="modal-body text-center">
+
+                <h4 class="mb-3">
+                    Your examination has been ended by your instructor.
+                </h4>
+
+                <p>
+                    Your answers have already been submitted and graded.
+                </p>
+
+            </div>
+
+            <div class="modal-footer">
+
+                <button
+                    id="backToDashboardBtn"
+                    class="btn btn-primary">
 
                     Return to Dashboard
 

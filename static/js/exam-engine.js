@@ -19,6 +19,8 @@
 //
 // ============================================================
 
+console.log("exam-engine.js loaded");
+
 const Exam = {
 
     startFullscreen(event, el) {
@@ -66,6 +68,20 @@ const Exam = {
         this.navigator.load();
 
         this.security.init();
+
+        this.live.init();
+
+        const dashboardBtn = document.getElementById("backToDashboardBtn");
+
+        if (dashboardBtn) {
+
+            dashboardBtn.addEventListener("click", () => {
+
+                window.location.href = "/dashboard/student";
+
+            });
+
+        }
 
     },
 
@@ -877,6 +893,11 @@ const Exam = {
 
         async logEvent(eventType) {
 
+            // Ignore security events after instructor has force submitted
+            if (Exam.live.forceSubmitted) {
+                return;
+            }
+
             try {
 
                 const response = await fetch("/log-security-event", {
@@ -917,7 +938,7 @@ const Exam = {
 
             }
 
-        },   // ← THIS COMMA WAS MISSING
+        },
 
         updateSecurityStatus(data) {
 
@@ -1141,8 +1162,102 @@ const Exam = {
 
         }
 
-    }
+    },
 
+    // ============================================
+    // ===== Student Live SSE =====================
+    // ============================================
+
+    live: {
+
+        stream: null,
+
+        forceSubmitted: false,
+
+        init() {
+
+            console.log("Entering live.init()");
+
+            const studentId = document.body.dataset.studentId;
+
+            if (!studentId) {
+                return;
+            }
+
+            this.stream = new EventSource(
+                `/stream/${studentId}`
+            );
+
+            this.stream.onopen = () => {
+                console.log("SSE OPEN");
+            };
+
+            this.stream.onmessage = (e) => {
+                console.log("Heartbeat:", e.data);
+            };
+
+            this.stream.addEventListener("force_submit", function (e) {
+
+                console.log("################################");
+                console.log("CUSTOM EVENT ARRIVED");
+                console.log(e.type);
+                console.log(e.data);
+                console.log("################################");
+
+            });
+
+            console.log("Connected to student stream:", studentId);
+
+            this.stream.addEventListener(
+                "force_submit",
+                (e) => {
+
+                    console.log("FORCE SUBMIT EVENT RECEIVED");
+                    console.log("=================================");
+                    console.log("FORCE SUBMIT EVENT RECEIVED");
+                    console.log(e);
+                    console.log(e.data);
+                    console.log("=================================");
+
+                    // Stop countdown
+                    if (Exam.timer.interval) {
+                        clearInterval(Exam.timer.interval);
+                    }
+
+                    // Prevent any further submission
+                    Exam.isSubmitting = true;
+
+                    // Stop all future security logging
+                    Exam.live.forceSubmitted = true;
+
+                    // Disable answer choices
+                    document.querySelectorAll(".option-btn").forEach(btn => {
+                        btn.disabled = true;
+                    });
+
+                    // Disable every button except the dashboard button
+                    document.querySelectorAll("button").forEach(btn => {
+
+                        if (btn.id !== "backToDashboardBtn") {
+                            btn.disabled = true;
+                        }
+
+                    });
+
+                    const modal = new bootstrap.Modal(
+                        document.getElementById("forceSubmitModal"),
+                        {
+                            backdrop: "static",
+                            keyboard: false
+                        }
+                    );
+
+                    modal.show();
+
+                }
+            );
+        }
+    }
 };
 
 // ============================================================
@@ -1150,6 +1265,8 @@ const Exam = {
 // ============================================================
 
 document.addEventListener("DOMContentLoaded", () => {
+
+    console.log("Exam Engine Loaded");
 
     Exam.init();
 

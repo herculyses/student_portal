@@ -220,6 +220,22 @@ function updateExamCard(exam) {
 
     }
 
+    else if (exam.status === "forced_submit") {
+
+        statusBox.innerHTML = `
+            <span class="badge bg-danger">
+                ⛔ Force Submitted
+            </span>
+        `;
+
+        actionBox.innerHTML = `
+            <button class="btn btn-secondary" disabled>
+                Done
+            </button>
+        `;
+
+    }
+
     else if (exam.status === "pending") {
 
         statusBox.innerHTML = `

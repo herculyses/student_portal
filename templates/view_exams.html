@@ -1753,6 +1753,65 @@ function reviewAttempt(examId, studentId) {
         });
 
 }
+
+// ============================================
+// =========👇 Force Submit ===================
+// ============================================
+function forceSubmit(examId, studentId) {
+
+    if (!confirm(
+        "Force submit this student's examination?"
+    )) {
+        return;
+    }
+
+    fetch("/force-submit", {
+
+        method: "POST",
+
+        headers: {
+            "Content-Type": "application/json"
+        },
+
+        body: JSON.stringify({
+
+            exam_id: examId,
+            student_id: studentId
+
+        })
+
+    })
+
+    .then(response => response.json())
+
+    .then(data => {
+
+        console.log("FORCE SUBMIT RESPONSE:", data);
+
+        if (!data.success) {
+            alert(data.message);
+            return;
+        }
+
+        updateStudentAccess(
+            studentId,
+            examId,
+            "forced_submit"
+        );
+
+        alert(data.message);
+
+    })
+
+    .catch(error => {
+
+        console.error(error);
+
+        alert("Force submit failed.");
+
+    });
+
+}
 </script>
 
 <!-- ============================================ -->
