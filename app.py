@@ -1851,15 +1851,20 @@ def view_exams():
                 ExamAttempt.query
                 .filter_by(
                     student_id=student.student_id,
-                    exam_id=exam.id,
-                    is_submitted=True
+                    exam_id=exam.id
                 )
                 .order_by(ExamAttempt.id.desc())
                 .first()
             )
 
+            active_attempt = (
+                attempt is not None and
+                not attempt.is_submitted
+            )
+
             score_map[(student.student_id, exam.id)] = {
                 "attempt": attempt,
+                "is_active_attempt": active_attempt,
                 "score": attempt.score if attempt else None,
                 "total": total_points,
                 "percentage": (
@@ -1900,20 +1905,6 @@ def view_exams():
                 summary["highest"] = max(percentages)
 
         exam_summary[exam.id] = summary
-
-        print("\n==============================")
-        print(f"Exam ID: {exam.id}")
-        print(f"Exam Title: {exam.title}")
-        print(f"Exam Subject Code: {exam.subject.subject_code}")
-
-        for s in students:
-            print(
-                f"Student ID: {s.student_id} | "
-                f"Name: {s.name} | "
-                f"Subject Code: {s.subject_code}"
-            )
-
-        print("==============================\n")
 
     return render_template(
         'view_exams.html',
@@ -3477,19 +3468,11 @@ def student_exam_status():
 
     for access in accesses:
 
-        print("=" * 70)
-        print("ROW ID:", access.id)
-        print("Exam:", access.exam_id)
-        print("Student:", access.student_id)
-        print("Status:", access.status)
-        print("=" * 70)
-
         exam = Exam.query.get(access.exam_id)
 
         result.append({
             "exam_id": access.exam_id,
             "status": access.status,
-
             "title": exam.title if exam else "",
             "subject": exam.subject.subject_code if exam and exam.subject else "N/A",
             "description": exam.description if exam else "",

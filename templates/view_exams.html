@@ -354,7 +354,20 @@ if (localStorage.getItem("darkMode") === "true") {
                             <td id="status-{{ student.student_id }}-{{ exam.id }}" class="text-center">
                                 {% if access %}
                                     {% if access.status == "approved" %}
-                                        <span class="badge bg-success">Approved</span>
+
+                                        {% if score_map[(student.student_id, exam.id)].is_active_attempt %}
+
+                                            <span class="badge bg-info">
+                                                🟢 Taking Exam
+                                            </span>
+
+                                        {% else %}
+
+                                            <span class="badge bg-success">
+                                                Approved
+                                            </span>
+
+                                        {% endif %}
                                     {% elif access.status == "pending" %}
                                         <span class="badge bg-warning text-dark">Pending</span>
                                     {% elif access.status == "completed" %}
@@ -362,7 +375,7 @@ if (localStorage.getItem("darkMode") === "true") {
                                     {% elif access.status == "rejected" %}
                                         <span class="badge bg-danger">Rejected</span>
                                     {% elif access.status == "forced_submit" %}
-                                        <span class="badge bg-dark">Force Submitted</span>
+                                        <span class="badge bg-danger">Force Submitted</span>
                                     {% elif access.status == "not_requested" %}
                                         <span class="badge bg-secondary">No Request</span>
                                     {% endif %}
@@ -390,6 +403,7 @@ if (localStorage.getItem("darkMode") === "true") {
                                         </button>
                                     </div>
                                 {% elif access and access.status in ["approved", "completed", "rejected", "forced_submit"] %}
+
                                     <div class="d-flex justify-content-center gap-2">
 
                                         <button
@@ -401,14 +415,29 @@ if (localStorage.getItem("darkMode") === "true") {
                                             👁 Review
                                         </button>
 
-                                        <button
-                                            class="btn btn-outline-warning btn-sm"
-                                            onclick="recycleExam(
-                                                {{ exam.id }},
-                                                '{{ student.student_id }}'
-                                            )">
-                                            ♻ Reset
-                                        </button>
+                                        {% if score_map[(student.student_id, exam.id)].is_active_attempt %}
+
+                                            <button
+                                                class="btn btn-danger btn-sm"
+                                                onclick="forceSubmit(
+                                                    {{ exam.id }},
+                                                    '{{ student.student_id }}'
+                                                )">
+                                                ⛔ Force Submit
+                                            </button>
+
+                                        {% else %}
+
+                                            <button
+                                                class="btn btn-outline-warning btn-sm"
+                                                onclick="recycleExam(
+                                                    {{ exam.id }},
+                                                    '{{ student.student_id }}'
+                                                )">
+                                                ♻ Reset
+                                            </button>
+
+                                        {% endif %}
 
                                     </div>
                                 {% else %}
@@ -1035,13 +1064,25 @@ function updateStudentAccess(studentId, examId, status) {
         `;
 
         actionBox.innerHTML = `
-            <button
-                class="btn btn-danger btn-sm"
-                onclick="forceSubmit(${examId}, '${studentId}')">
+            <div class="d-flex justify-content-center gap-2">
 
-                ⛔ Force Submit
+                <button
+                    class="btn btn-outline-primary btn-sm"
+                    onclick="reviewAttempt(${examId}, '${studentId}')">
 
-            </button>
+                    👁 Review
+
+                </button>
+
+                <button
+                    class="btn btn-danger btn-sm"
+                    onclick="forceSubmit(${examId}, '${studentId}')">
+
+                    ⛔ Force Submit
+
+                </button>
+
+            </div>
         `;
 
     }
@@ -1056,13 +1097,25 @@ function updateStudentAccess(studentId, examId, status) {
         `;
 
         actionBox.innerHTML = `
-            <button
-                class="btn btn-outline-warning btn-sm"
-                onclick="recycleExam(${examId}, '${studentId}')">
+            <div class="d-flex justify-content-center gap-2">
 
-                ♻ Reset
+                <button
+                    class="btn btn-outline-primary btn-sm"
+                    onclick="reviewAttempt(${examId}, '${studentId}')">
 
-            </button>
+                    👁 Review
+
+                </button>
+                <button
+                    class="btn btn-outline-warning btn-sm"
+                    onclick="recycleExam(${examId}, '${studentId}')">
+
+                    ♻ Reset
+
+                </button>
+
+            </div>
+
         `;
     }
 
@@ -1101,13 +1154,26 @@ function updateStudentAccess(studentId, examId, status) {
         `;
 
         actionBox.innerHTML = `
-            <button
-                class="btn btn-outline-warning btn-sm"
-                onclick="recycleExam(${examId}, '${studentId}')">
+            <div class="d-flex justify-content-center gap-2">
 
-                ♻ Reset
+                <button
+                    class="btn btn-outline-primary btn-sm"
+                    onclick="reviewAttempt(${examId}, '${studentId}')">
 
-            </button>
+                    👁 Review
+
+                </button>
+
+                <button
+                    class="btn btn-outline-warning btn-sm"
+                    onclick="recycleExam(${examId}, '${studentId}')">
+
+                    ♻ Reset
+
+                </button>
+
+            </div>
+
         `;
     }
 
