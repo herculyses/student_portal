@@ -1176,87 +1176,66 @@ const Exam = {
 
         init() {
 
-            console.log("Entering live.init()");
+            console.log("Lightweight force-submit checker started.");
 
-            const studentId = document.body.dataset.studentId;
+            setInterval(async () => {
 
-            if (!studentId) {
-                return;
-            }
+                try {
 
-            this.stream = new EventSource(
-                `/stream/${studentId}`
-            );
+                    const response = await fetch("/exam/check-force-submit");
 
-            this.stream.onopen = () => {
-                console.log("SSE OPEN");
-            };
+                    const data = await response.json();
 
-            this.stream.onmessage = (e) => {
-                console.log("Heartbeat:", e.data);
-            };
+                    if (data.force_submit && !this.forceSubmitted) {
 
-            this.stream.addEventListener("force_submit", function (e) {
+                        console.log("FORCE SUBMIT DETECTED");
 
-                console.log("################################");
-                console.log("CUSTOM EVENT ARRIVED");
-                console.log(e.type);
-                console.log(e.data);
-                console.log("################################");
+                        Exam.live.forceSubmitted = true;
 
-            });
+                        // Stop countdown
+                        if (Exam.timer.interval) {
+                            clearInterval(Exam.timer.interval);
+                        }
 
-            console.log("Connected to student stream:", studentId);
+                        // Prevent any further submission
+                        Exam.isSubmitting = true;
 
-            this.stream.addEventListener(
-                "force_submit",
-                (e) => {
+                        // Disable answer choices
+                        document.querySelectorAll(".option-btn").forEach(btn => {
+                            btn.disabled = true;
+                        });
 
-                    console.log("FORCE SUBMIT EVENT RECEIVED");
-                    console.log("=================================");
-                    console.log("FORCE SUBMIT EVENT RECEIVED");
-                    console.log(e);
-                    console.log(e.data);
-                    console.log("=================================");
+                        // Disable every button except the dashboard button
+                        document.querySelectorAll("button").forEach(btn => {
 
-                    // Stop countdown
-                    if (Exam.timer.interval) {
-                        clearInterval(Exam.timer.interval);
+                            if (btn.id !== "backToDashboardBtn") {
+                                btn.disabled = true;
+                            }
+
+                        });
+
+                        const modal = new bootstrap.Modal(
+                            document.getElementById("forceSubmitModal"),
+                            {
+                                backdrop: "static",
+                                keyboard: false
+                            }
+                        );
+
+                        modal.show();
+
                     }
 
-                    // Prevent any further submission
-                    Exam.isSubmitting = true;
+                } catch (err) {
 
-                    // Stop all future security logging
-                    Exam.live.forceSubmitted = true;
-
-                    // Disable answer choices
-                    document.querySelectorAll(".option-btn").forEach(btn => {
-                        btn.disabled = true;
-                    });
-
-                    // Disable every button except the dashboard button
-                    document.querySelectorAll("button").forEach(btn => {
-
-                        if (btn.id !== "backToDashboardBtn") {
-                            btn.disabled = true;
-                        }
-
-                    });
-
-                    const modal = new bootstrap.Modal(
-                        document.getElementById("forceSubmitModal"),
-                        {
-                            backdrop: "static",
-                            keyboard: false
-                        }
-                    );
-
-                    modal.show();
+                    console.error("Force-submit check failed:", err);
 
                 }
-            );
+
+            }, 5000);
+
         }
+
     }
 };
 

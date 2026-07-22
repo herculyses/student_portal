@@ -15,6 +15,7 @@ from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from flask_migrate import Migrate
 from collections import defaultdict
+from time import perf_counter
 
 import pandas as pd
 import tempfile
@@ -389,6 +390,14 @@ class ExamAccess(db.Model):
 
 class StudentAnswer(db.Model):
     __tablename__ = 'student_answers'
+
+    __table_args__ = (
+        db.Index(
+            'idx_student_answer_attempt_question',
+            'attempt_id',
+            'question_id'
+        ),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
 
@@ -843,10 +852,41 @@ def get_latest_submitted_attempts(exam_id):
 # ======================================
 def get_saved_answer(attempt_id, question_id):
 
-    return StudentAnswer.query.filter_by(
+    t = time.perf_counter()
+
+    answer = StudentAnswer.query.filter_by(
         attempt_id=attempt_id,
         question_id=question_id
     ).first()
+
+    print(
+        "SQL get_saved_answer:",
+        round(time.perf_counter() - t, 4),
+        "sec"
+    )
+
+    return answer
+
+# ======================================
+# ===== Get First Unanswered Question ===
+# ======================================
+
+def get_first_unanswered_question(attempt_id):
+
+    questions = get_attempt_questions(attempt_id)
+
+    for question in questions:
+
+        answer = StudentAnswer.query.filter_by(
+            attempt_id=attempt_id,
+            question_id=question.id
+        ).first()
+
+        if not answer:
+            return question
+
+    # Everything answered
+    return questions[0] if questions else None
 
 # ======================================
 # ---- Build Exam Summary ----
@@ -2344,6 +2384,11 @@ def start_exam(exam_id):
         flash("You are not allowed to take this exam.", "danger")
         return redirect(url_for("dashboard_student"))
 
+    # =====================================
+    # Remember if this launch is a RESET
+    # =====================================
+    was_reset = access.is_reset
+
     # ----------------------------------------
     # Normal students must be approved.
     # Reset students are allowed to continue.
@@ -2382,13 +2427,30 @@ def start_exam(exam_id):
     print("Access Reset:", access.is_reset)
     print("=" * 50)
 
+    # =====================================
+    # Re-open existing attempt after reset
+    # =====================================
+    if attempt and was_reset:
+
+        now = datetime.utcnow()
+
+        attempt.is_submitted = False
+        attempt.submitted_at = None
+
+        attempt.started_at = now
+        attempt.end_time = now + timedelta(
+            minutes=exam.duration_minutes
+        )
+
+        db.session.commit()
+
     # 5. If already submitted → block
     if attempt and attempt.is_submitted and not access.is_reset:
         flash("You already completed this exam.", "warning")
         return redirect(url_for('dashboard_student'))
 
     # 6. Create attempt only if missing
-    if not attempt or access.is_reset:
+    if not attempt:
 
         now = datetime.utcnow()
 
@@ -2446,11 +2508,25 @@ def start_exam(exam_id):
     # ==============================
     notify_exam_started(access)
 
+    # ======================================
+    # Determine where the student should resume
+    # ======================================
+
+    if was_reset:
+
+        resume_question = get_first_unanswered_question(attempt.id)
+
+    else:
+
+        resume_question = first_question
+
     return redirect(url_for(
-        'take_exam',
+        "take_exam",
         exam_id=exam.id,
-        question_id=first_question.id
-    ))
+        question_id=resume_question.id
+    )
+
+)
 
 #===================================
 #===== REQUEST EXAM ROUTE =====
@@ -2784,6 +2860,9 @@ def cancel_exam_request():
 @login_required(role=['Admin', 'Instructor', 'Student'])
 def take_exam(exam_id, question_id):
 
+    page_timer = time.perf_counter()
+    route_start = time.perf_counter()
+
     student_id = session.get('student_id')
     attempt_id = session.get('attempt_id')
 
@@ -2823,13 +2902,29 @@ def take_exam(exam_id, question_id):
             exam_id=exam_id
         ))
 
+    t = time.perf_counter()
+
     exam = Exam.query.get_or_404(exam_id)
+
+    print(
+        "EXAM LOAD:",
+        round(time.perf_counter() - t, 4),
+        "sec"
+    )
 
     # ==========================================
     # LOAD RANDOMIZED QUESTION ORDER
     # ==========================================
 
+    t = time.perf_counter()
+
     questions = get_attempt_questions(attempt.id)
+
+    print(
+        "QUESTION LOAD:",
+        round(time.perf_counter() - t, 4),
+        "sec"
+    )
 
     if not questions:
 
@@ -2851,20 +2946,43 @@ def take_exam(exam_id, question_id):
     next_question = questions[current_index + 1] if current_index + 1 < len(questions) else None
 
     # Get student's previously selected answer (if any)
+    t = time.perf_counter()
+
     saved_answer = get_saved_answer(
         attempt_id,
         current_question.id
     )
 
+    print(
+        "ANSWER LOAD:",
+        round(time.perf_counter() - t, 4),
+        "sec"
+    )
+
     # 4. REAL progress (DB-based)
     total_questions = len(questions)
+
+    t = time.perf_counter()
 
     answer_progress = calculate_exam_progress(
         attempt_id,
         total_questions
     )
 
-    return render_template(
+    print(
+        "PROGRESS LOAD:",
+        round(time.perf_counter() - t, 4),
+        "sec"
+    )
+
+    print(
+        f"TAKE_EXAM BUILD TIME: "
+        f"{time.perf_counter() - page_timer:.4f} sec"
+    )
+
+    t = time.perf_counter()
+
+    response = render_template(
         "take_exam.html",
         exam=exam,
         student_id=student_id,
@@ -2878,9 +2996,19 @@ def take_exam(exam_id, question_id):
         saved_answer=saved_answer
     )
 
+    print(
+        "RENDER:",
+        round(time.perf_counter() - t, 4),
+        "sec"
+    )
+
+    return response
+
 @app.route('/save-answer', methods=['POST'])
 @login_required(role=['Admin', 'Instructor', 'Student'])
 def save_answer():
+
+    start = perf_counter()
 
     data = request.get_json()
     attempt_id = session.get('attempt_id')
@@ -2904,6 +3032,10 @@ def save_answer():
         answer.selected_answer = data['answer']
 
     db.session.commit()
+
+    print(
+        f"SAVE ANSWER TIME: {perf_counter() - start:.4f} sec"
+    )
 
     return jsonify({"status": "saved"})
 
@@ -3643,6 +3775,37 @@ def force_submit():
         }
     )
 
+    # ------------------------------------
+    # Notify Admin Dashboard
+    # ------------------------------------
+
+    if "admin" not in sse_events:
+        sse_events["admin"] = []
+
+    sse_events["admin"].append({
+
+        "event": "live_update",
+
+        "data": {
+
+            "student_id": student_id,
+            "exam_id": exam_id,
+
+            "status": "forced_submit",
+
+            "score": score,
+            "total_points": total_points,
+
+            "submitted_at": (
+                attempt.submitted_at + timedelta(hours=8)
+            ).strftime("%Y-%m-%d %I:%M %p"),
+
+            "summary": build_exam_summary(exam_id)
+
+        }
+
+    })
+
     access = get_exam_access(
         student_id,
         exam_id
@@ -3688,6 +3851,40 @@ def force_submit():
     return jsonify({
         "success": True,
         "message": "Student has been force submitted."
+    })
+
+@app.route("/exam/check-force-submit")
+@login_required(role=["Student"])
+def check_force_submit():
+
+    attempt_id = session.get("attempt_id")
+
+    print("CHECK:", attempt_id)
+
+    if not attempt_id:
+        print("No attempt")
+        return jsonify({"force_submit": False})
+
+    attempt = ExamAttempt.query.get(attempt_id)
+
+    if not attempt:
+        return jsonify({"force_submit": False})
+
+    access = ExamAccess.query.filter_by(
+        exam_id=attempt.exam_id,
+        student_id=attempt.student_id
+    ).first()
+
+    print("ACCESS:", access)
+
+    if access:
+        print("STATUS:", access.status)
+
+    if not access:
+        return jsonify({"force_submit": False})
+
+    return jsonify({
+        "force_submit": access.status == "forced_submit"
     })
 
 # =========================================================
