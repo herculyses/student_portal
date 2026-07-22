@@ -479,7 +479,124 @@ if (localStorage.getItem("darkMode") === "true") {
   </div>
 </div>
 
+<!-- ================= RIGHT SIDEBAR ================= -->
+<div id="rightSidebar" class="right-sidebar bg-dark text-white p-3 collapsed">
+
+    <!-- HEADER -->
+    <div class="d-flex justify-content-between align-items-center mb-3">
+
+        <h5 class="mb-0 hide-on-collapse">
+            Course Management
+        </h5>
+
+        <!-- COLLAPSE BUTTON -->
+        <button class="btn btn-outline-light btn-sm"
+                onclick="toggleRightSidebar()">
+
+            <i class="bi bi-layout-sidebar-inset"></i>
+
+        </button>
+
+    </div>
+
+    <!-- ================= SUBJECTS ================= -->
+
+    <div class="card bg-secondary text-white border-0 mb-3">
+
+        <div class="card-body">
+
+            <h6 class="mb-3">
+                <i class="bi bi-book"></i>
+                <span class="hide-on-collapse">Subjects</span>
+            </h6>
+
+            <!-- VIEW SUBJECTS -->
+            <a href="{{ url_for('view_subjects') }}"
+               class="btn btn-info w-100 mb-2">
+
+                <i class="bi bi-eye"></i>
+                <span class="hide-on-collapse">View Subjects</span>
+
+            </a>
+
+        </div>
+
+    </div>
+
+    <!-- ================= EXAMS ================= -->
+
+    <div class="card bg-secondary text-white border-0">
+
+        <div class="card-body">
+
+            <h6 class="mb-3">
+                <i class="bi bi-file-earmark-text"></i>
+                <span class="hide-on-collapse">Exams</span>
+            </h6>
+
+            <!-- VIEW EXAMS -->
+            <a href="{{ url_for('view_exams') }}"
+               class="btn btn-info w-100 mb-3"
+               title="View Exams">
+
+               <i class="bi bi-eye"></i>
+               <span class="hide-on-collapse">View Exams</span>
+
+            </a>
+
+            <!-- FINISHED EXAMS -->
+            <a href="{{ url_for('finished_exams') }}"
+               class="btn btn-info w-100 mb-3"
+               title="Finished Exams">
+
+               <i class="bi bi-check2-square"></i>
+               <span class="hide-on-collapse">Finished Exams</span>
+            </a>
+
+            <!-- ADD QUESTIONS -->
+            <div class="dropdown">
+
+                <button class="btn btn-success w-100 dropdown-toggle"
+                        type="button"
+                        data-bs-toggle="dropdown">
+
+                    <i class="bi bi-patch-question"></i>
+                    <span class="hide-on-collapse">Add Questions</span>
+
+                </button>
+
+                <ul class="dropdown-menu dropdown-menu-end w-100">
+
+                    {% for exam in exams %}
+
+                    <li>
+
+                        <a class="dropdown-item"
+                           href="{{ url_for('add_question', exam_id=exam.id) }}">
+
+                            {{ exam.subject.subject_code }}
+                            -
+                            {{ exam.title }}
+
+                        </a>
+
+                    </li>
+
+                    {% endfor %}
+
+                </ul>
+
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+<!-- =========================================== -->
 <!-- ================= SCRIPTS ================= -->
+<!-- =========================================== -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
 <script>
@@ -578,111 +695,6 @@ setInterval(updateTimer,1000);
 
 </script>
 
-<!-- ================= RIGHT SIDEBAR ================= -->
-<div id="rightSidebar" class="right-sidebar bg-dark text-white p-3 collapsed">
-
-    <!-- HEADER -->
-    <div class="d-flex justify-content-between align-items-center mb-3">
-
-        <h5 class="mb-0 hide-on-collapse">
-            Exam Management
-        </h5>
-
-        <!-- COLLAPSE BUTTON -->
-        <button class="btn btn-outline-light btn-sm"
-                onclick="toggleRightSidebar()">
-
-            <i class="bi bi-layout-sidebar-inset"></i>
-
-        </button>
-
-    </div>
-
-    <!-- ================= SUBJECTS ================= -->
-
-    <div class="card bg-secondary text-white border-0 mb-3">
-
-        <div class="card-body">
-
-            <h6 class="mb-3">
-                <i class="bi bi-book"></i>
-                <span class="hide-on-collapse">Subjects</span>
-            </h6>
-
-            <!-- VIEW SUBJECTS -->
-            <a href="{{ url_for('view_subjects') }}"
-               class="btn btn-info w-100 mb-2">
-
-                <i class="bi bi-eye"></i>
-                <span class="hide-on-collapse">View Subjects</span>
-
-            </a>
-
-        </div>
-
-    </div>
-
-    <!-- ================= EXAMS ================= -->
-
-    <div class="card bg-secondary text-white border-0">
-
-        <div class="card-body">
-
-            <h6 class="mb-3">
-                <i class="bi bi-file-earmark-text"></i>
-                <span class="hide-on-collapse">Exams</span>
-            </h6>
-
-            <!-- VIEW EXAMS -->
-            <a href="{{ url_for('view_exams') }}"
-               class="btn btn-info w-100 mb-3"
-               title="View Exams">
-
-               <i class="bi bi-eye"></i>
-               <span class="hide-on-collapse">View Exams</span>
-
-            </a>
-
-            <!-- ADD QUESTIONS -->
-            <div class="dropdown">
-
-                <button class="btn btn-success w-100 dropdown-toggle"
-                        type="button"
-                        data-bs-toggle="dropdown">
-
-                    <i class="bi bi-patch-question"></i>
-                    <span class="hide-on-collapse">Add Questions</span>
-
-                </button>
-
-                <ul class="dropdown-menu dropdown-menu-end w-100">
-
-                    {% for exam in exams %}
-
-                    <li>
-
-                        <a class="dropdown-item"
-                           href="{{ url_for('add_question', exam_id=exam.id) }}">
-
-                            {{ exam.subject.subject_code }}
-                            -
-                            {{ exam.title }}
-
-                        </a>
-
-                    </li>
-
-                    {% endfor %}
-
-                </ul>
-
-            </div>
-
-        </div>
-
-    </div>
-
-</div>
 
 <script>
 

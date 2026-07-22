@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>View Exams</title>
+<title>Finished Exams</title>
 
 {% with messages = get_flashed_messages(with_categories=true) %}
 {% if messages %}
@@ -73,29 +73,35 @@ if (localStorage.getItem("darkMode") === "true") {
     <!-- HEADER -->
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2>
-            <i class="bi bi-file-earmark-text"></i> View Exams
+            <i class="bi bi-file-earmark-text"></i> Finished Exams
         </h2>
         <div class="d-flex gap-2">
 
-            <!-- CREATE EXAM -->
-            <button type="button"
-                    class="btn btn-primary"
-                    data-bs-toggle="modal"
-                    data-bs-target="#createExamModal">
-                <i class="bi bi-plus-circle"></i> Create Exam
-            </button>
+            <!-- VIEW ACTIVE EXAMS -->
+            <a href="{{ url_for('view_exams') }}"
+               class="btn btn-primary">
 
-            <!-- FINISHED EXAMS -->
-            <a href="{{ url_for('finished_exams') }}"
+                <i class="bi bi-list-check"></i>
+                View Active Exams
+
+            </a>
+
+            <!-- ARCHIVED EXAMS -->
+            <a href="{{ url_for('archived_exams') }}"
                class="btn btn-success">
-                <i class="bi bi-check2-square"></i>
-                Finished Exams
+
+                <i class="bi bi-archive-fill"></i>
+                Archived Exams
+
             </a>
 
             <!-- BACK -->
             <a href="{{ url_for('dashboard_admin') }}"
                class="btn btn-secondary">
-                <i class="bi bi-arrow-left"></i> Back
+
+                <i class="bi bi-arrow-left"></i>
+                Back to Admin
+
             </a>
 
         </div>
@@ -139,9 +145,9 @@ if (localStorage.getItem("darkMode") === "true") {
                    class="btn btn-success btn-sm">
                     <i class="bi bi-plus-circle"></i> Add Questions
                 </a>
-                <form method="POST" action="{{ url_for('end_exam', exam_id=exam.id) }}">
-                    <button class="btn btn-danger btn-sm">
-                        <i class="bi bi-stop-circle"></i> End Exam
+                <form method="POST" action="{{ url_for('admin_start_exam', exam_id=exam.id) }}">
+                    <button class="btn btn-warning btn-sm">
+                        <i class="bi bi-play-circle"></i> Start Exam
                     </button>
                 </form>
             </div>
@@ -421,29 +427,13 @@ if (localStorage.getItem("darkMode") === "true") {
                                             👁 Review
                                         </button>
 
-                                        {% if score_map[(student.student_id, exam.id)].is_active_attempt %}
+                                        <button
+                                            class="btn btn-outline-secondary btn-sm"
+                                            disabled>
 
-                                            <button
-                                                class="btn btn-danger btn-sm"
-                                                onclick="forceSubmit(
-                                                    {{ exam.id }},
-                                                    '{{ student.student_id }}'
-                                                )">
-                                                ⛔ Force Submit
-                                            </button>
+                                            🔒 Finished
 
-                                        {% else %}
-
-                                            <button
-                                                class="btn btn-outline-warning btn-sm"
-                                                onclick="recycleExam(
-                                                    {{ exam.id }},
-                                                    '{{ student.student_id }}'
-                                                )">
-                                                ♻ Reset
-                                            </button>
-
-                                        {% endif %}
+                                        </button>
 
                                     </div>
                                 {% else %}
@@ -844,7 +834,7 @@ adminStream.addEventListener("new_request", function (e) {
 });
 
 // ============================================
-// =========👇SSE live_update listener========
+// =========👇SSE listener==========
 // ============================================
 adminStream.addEventListener("live_update", function (e) {
 
@@ -870,17 +860,6 @@ adminStream.addEventListener("live_update", function (e) {
         console.log("SUMMARY DATA:", data.summary);
         updateSummaryCards(data.exam_id, data.summary);
     }
-
-});
-
-// ============================================
-// =========👇SSE exam_ended listener=========
-// ============================================
-adminStream.addEventListener("exam_ended", function (e) {
-
-    const data = JSON.parse(e.data);
-
-    console.log("🏁 Exam ended:", data);
 
 });
 

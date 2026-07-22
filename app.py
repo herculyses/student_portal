@@ -1956,6 +1956,174 @@ def view_exams():
         subjects=subjects
     )
 
+# =========================
+# Finished Exam Route
+# =========================
+@app.route("/finished-exams")
+@login_required(role=["Admin", "Instructor"])
+def finished_exams():
+
+    print("===== FINISHED_EXAMS ROUTE HIT =====")
+
+    subjects = Subject.query.all()
+
+    exams = (
+        Exam.query
+        .filter_by(is_active=False)
+        .order_by(Exam.created_at.desc())
+        .all()
+    )
+
+    access_records = ExamAccess.query.all()
+
+    access_map = {
+        (a.student_id, a.exam_id): a
+        for a in ExamAccess.query.filter(
+            ExamAccess.status != "not_requested"
+        ).all()
+    }
+
+    exam_students = {}
+    score_map = {}
+    exam_summary = {}
+
+    for exam in exams:
+
+        students = (
+            db.session.query(Student)
+            .join(
+                ExamAccess,
+                Student.student_id == ExamAccess.student_id
+            )
+            .filter(
+                ExamAccess.exam_id == exam.id,
+                Student.subject_code == exam.subject.subject_code,
+                ExamAccess.status != "not_requested"
+            )
+            .distinct()
+            .all()
+        )
+
+        exam_students[exam.id] = students
+
+        summary = {
+            "requested": len(students),
+            "pending": 0,
+            "approved": 0,
+            "completed": 0,
+            "rejected": 0,
+            "forced_submit": 0,
+            "passed": 0,
+            "failed": 0,
+            "average": 0,
+            "highest": 0
+        }
+
+        percentages = []
+
+        total_points = sum(
+            q.points
+            for q in exam.questions
+        )
+
+        for student in students:
+
+            access = access_map.get(
+                (student.student_id, exam.id)
+            )
+
+            if access:
+
+                if access.status == "pending":
+                    summary["pending"] += 1
+                elif access.status == "approved":
+                    summary["approved"] += 1
+                elif access.status == "completed":
+                    summary["completed"] += 1
+                elif access.status == "rejected":
+                    summary["rejected"] += 1
+                elif access.status == "forced_submit":
+                    summary["forced_submit"] += 1
+
+            attempt = (
+                ExamAttempt.query
+                .filter_by(
+                    student_id=student.student_id,
+                    exam_id=exam.id
+                )
+                .order_by(ExamAttempt.id.desc())
+                .first()
+            )
+
+            active_attempt = (
+                attempt is not None and
+                not attempt.is_submitted
+            )
+
+            percentage = (
+                round((attempt.score / total_points) * 100)
+                if attempt and total_points > 0
+                else None
+            )
+
+            score_map[(student.student_id, exam.id)] = {
+                "attempt": attempt,
+                "is_active_attempt": active_attempt,
+                "score": attempt.score if attempt else None,
+                "total": total_points,
+                "percentage": percentage,
+                "submitted_at": (
+                    attempt.submitted_at + timedelta(hours=8)
+                    if attempt and attempt.submitted_at
+                    else None
+                )
+            }
+
+            if percentage is not None:
+
+                percentages.append(percentage)
+
+                if percentage >= 70:
+                    summary["passed"] += 1
+                else:
+                    summary["failed"] += 1
+
+        if percentages:
+
+            summary["average"] = round(
+                sum(percentages) / len(percentages),
+                1
+            )
+
+            summary["highest"] = max(percentages)
+
+        exam_summary[exam.id] = summary
+
+    return render_template(
+        "finished_exams.html",
+        exams=exams,
+        exam_students=exam_students,
+        access_map=access_map,
+        score_map=score_map,
+        exam_summary=exam_summary,
+        subjects=subjects
+    )
+
+# =========================
+# Archived Exams
+# =========================
+
+@app.route("/archived-exams")
+@login_required(role=["Admin", "Instructor"])
+def archived_exams():
+
+    return render_template(
+        "archived_exams.html"
+    )
+
+# =========================
+# Edit Exam Route
+# =========================
 @app.route('/edit-exam/<int:exam_id>', methods=['GET', 'POST'])
 @login_required(role=['Admin', 'Instructor'])
 def edit_exam(exam_id):
@@ -2013,7 +2181,6 @@ def edit_exam(exam_id):
 # =========================================================
 # 3. ✏️ QUESTION MANAGEMENT
 # =========================================================
-
 @app.route('/add-question/<int:exam_id>', methods=['GET', 'POST'])
 @login_required(role=['Admin', 'Instructor'])
 def add_question(exam_id):
@@ -2094,6 +2261,9 @@ def add_question(exam_id):
         subjects=subjects
     )
 
+# =========================
+# Edit Exam Question Route
+# =========================
 @app.route('/edit-question/<int:question_id>', methods=['GET', 'POST'])
 @login_required(role=['Admin', 'Instructor'])
 def edit_question(question_id):
@@ -2169,6 +2339,9 @@ def edit_question(question_id):
     "message": "Use AJAX to edit questions."
 })
 
+# =========================
+# Delete Exam Question Route
+# =========================
 @app.route('/delete-question/<int:question_id>', methods=['POST'])
 @login_required(role=['Admin', 'Instructor'])
 def delete_question(question_id):
@@ -2182,7 +2355,9 @@ def delete_question(question_id):
     # =====================
     return jsonify({"success": True})
 
-
+# =========================
+# Import Exam Question Route
+# =========================
 @app.route('/import-questions/<int:exam_id>', methods=['POST'])
 @login_required(role=['Admin', 'Instructor'])
 def import_questions(exam_id):
@@ -2253,7 +2428,9 @@ def import_questions(exam_id):
 
     return redirect(url_for('add_question', exam_id=exam.id))
 
-
+# =========================
+# Export Exam Question Route
+# =========================
 @app.route('/export-questions/<int:exam_id>')
 @login_required(role=['Admin', 'Instructor'])
 def export_questions(exam_id):
@@ -3431,6 +3608,9 @@ def approve_exam_student(exam_id, student_id):
     flash("Student approved for exam.", "success")
     return redirect(url_for('view_exams'))
 
+# ==================================
+# Approve Student Exam Request ROUTE
+# ==================================
 @app.route('/approve-request/<int:access_id>')
 @login_required(role=['Admin', 'Instructor'])
 def approve_request(access_id):
@@ -3470,6 +3650,9 @@ def approve_request(access_id):
 
     return redirect(url_for("view_exams"))
 
+# ==================================
+# Admin Starts Exam
+# ==================================
 @app.route('/start-exam/<int:exam_id>', methods=['POST'])
 @login_required(role=['Instructor', 'Admin'])
 def admin_start_exam(exam_id):
@@ -3482,6 +3665,9 @@ def admin_start_exam(exam_id):
     flash("Exam started successfully!", "success")
     return redirect(url_for('view_exams'))
 
+# ==================================
+# Admin Ends Exam
+# ==================================
 @app.route('/end-exam/<int:exam_id>', methods=['POST'])
 @login_required(role=['Instructor', 'Admin'])
 def end_exam(exam_id):
@@ -3491,9 +3677,26 @@ def end_exam(exam_id):
 
     db.session.commit()
 
+    # Notify all students currently connected
+
+    for access in ExamAccess.query.filter_by(exam_id=exam.id).all():
+
+        sse_events[access.student_id].append({
+
+            "event": "exam_ended",
+
+            "data": {
+                "exam_id": exam.id
+            }
+
+        })
+
     flash("Exam ended successfully!", "warning")
     return redirect(url_for('view_exams'))
 
+# ==================================
+# Admin Deletes Exam
+# ==================================
 @app.route('/delete-exam/<int:exam_id>', methods=['POST'])
 @login_required(role=['Admin', 'Instructor'])
 def delete_exam(exam_id):

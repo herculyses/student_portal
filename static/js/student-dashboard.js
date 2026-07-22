@@ -522,3 +522,57 @@ if (!window.studentId) {
     };
 
 }
+
+/* ================= Greetings ================= */
+(function () {
+
+    const greeting = document.getElementById("greetingTitle");
+
+    if (!greeting) return;
+
+    const hour = new Date().getHours();
+
+    let message = "👋 Welcome";
+
+    if (hour < 12) {
+
+        message = "☀️ Good Morning";
+
+    } else if (hour < 18) {
+
+        message = "🌤️ Good Afternoon";
+
+    } else {
+
+        message = "🌙 Good Evening";
+
+    }
+
+    greeting.innerHTML = `${message}, ${window.studentName}`;
+
+})();
+
+/* ================= MOBILE SIDEBAR ================= */
+
+(function () {
+
+    const sidebar = document.getElementById("studentSidebar");
+    const icon = document.getElementById("sidebarIcon");
+
+    if (!sidebar || !icon) return;
+
+    sidebar.addEventListener("show.bs.collapse", function () {
+
+        icon.classList.remove("bi-list");
+        icon.classList.add("bi-x-lg");
+
+    });
+
+    sidebar.addEventListener("hide.bs.collapse", function () {
+
+        icon.classList.remove("bi-x-lg");
+        icon.classList.add("bi-list");
+
+    });
+
+})();

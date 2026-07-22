@@ -70,6 +70,7 @@ if (localStorage.getItem("darkMode") === "true") {
   position: fixed;
   height: 100vh;
   overflow-y: auto;
+  transition: width .25s ease;
 }
 
 .dark-mode .sidebar {
@@ -79,6 +80,14 @@ if (localStorage.getItem("darkMode") === "true") {
 /* ================= CONTENT ================= */
 .main-content {
   margin-left: 250px;
+  transition: margin-left .25s ease;
+}
+.sidebar.collapsed {
+    width: 70px;
+}
+
+.main-content.collapsed {
+    margin-left: 70px;
 }
 
 /* ================= EXAM CARDS ================= */
@@ -174,19 +183,99 @@ if (localStorage.getItem("darkMode") === "true") {
 
 }
 
+/* ================= MOBILE SIDEBAR ================= */
+
+@media (max-width: 991.98px) {
+
+    .sidebar{
+        position: relative;
+        width: 100%;
+        height: auto;
+        margin-bottom: 1rem;
+    }
+
+    .main-content{
+        margin-left: 0;
+    }
+
+}
+
+/* ================= MOBILE SIDEBAR ANIMATION ================= */
+
+#studentSidebar{
+    transition: all .35s ease;
+}
+
+#studentSidebar.collapsing{
+
+    opacity: 0;
+
+    transform: translateY(-12px);
+
+}
+
+#studentSidebar.collapse.show{
+
+    opacity: 1;
+
+    transform: translateY(0);
+
+    animation: sidebarDrop .35s ease;
+
+}
+
+@keyframes sidebarDrop{
+
+    from{
+
+        opacity:0;
+
+        transform:translateY(-12px);
+
+    }
+
+    to{
+
+        opacity:1;
+
+        transform:translateY(0);
+
+    }
+
+}
 </style>
+
 </head>
-
 <body class="bg-light">
-
 <div class="d-flex">
 
-<!-- ================= SIDEBAR ================= -->
-<div class="bg-primary text-white p-3 sidebar">
+<!-- ================= MAIN CONTENT ================= -->
+<div class="d-lg-none p-3 bg-primary text-white sticky-top shadow-sm">
 
-  <h5 class="text-center mb-4">
-    <i class="bi bi-mortarboard-fill"></i>
-    Student Panel
+    <button
+        id="sidebarToggle"
+        class="btn btn-light btn-sm me-2"
+        type="button"
+        data-bs-toggle="collapse"
+        data-bs-target="#studentSidebar"
+        aria-expanded="false">
+
+        <i id="sidebarIcon" class="bi bi-list"></i>
+
+    </button>
+
+    <span class="fw-bold">
+        🎓 Student Dashboard 
+    </span>
+
+</div>
+
+<!-- ================= SIDEBAR ================= -->
+<div id="studentSidebar"
+     class="collapse d-lg-block bg-primary text-white p-3 sidebar">
+
+  <h5 class="text-center mb-4 d-none d-lg-block">
+      🎓 Student Dashboard
   </h5>
 
   {% if session.get('role') == 'Admin' %}
@@ -223,16 +312,12 @@ if (localStorage.getItem("darkMode") === "true") {
 
 </div>
 
-<!-- ================= MAIN CONTENT ================= -->
-<div class="flex-grow-1 main-content">
-
-<div class="container mt-4">
-
 <!-- ================= HEADER ================= -->
+<div class="container mt-4">
 <div class="mb-4">
 
-  <h2 class="mb-1">
-    {{ student_name or "Student" }}'s Dashboard
+  <h2 class="mb-1" id="greetingTitle">
+    👋 Welcome, {{ student_name or "Student" }}
   </h2>
 
     <p class="text-muted">
@@ -820,6 +905,10 @@ if (localStorage.getItem("darkMode") === "true") {
 
 <!-- ================= START SCRIPTS ================= -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+window.studentName = "{{ student_name or 'Student' }}";
+window.studentId = "{{ student.student_id if student else '' }}";
+</script>
 <script>window.studentId = "{{ student.student_id if student else '' }}";</script>
 <script src="{{ url_for('static', filename='js/student-dashboard.js') }}"></script>
 <!-- ================= END SCRIPTS ================= -->
