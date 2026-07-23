@@ -232,10 +232,12 @@ class Exam(db.Model):
     description = db.Column(db.Text)
     duration_minutes = db.Column(db.Integer, default=30)
     is_active = db.Column(db.Boolean, default=True)
+    is_archived = db.Column(db.Boolean, default=False)  # <-- NEW LINE 1: Is it in archive box?
+    archived_at = db.Column(db.DateTime, nullable=True)  # <-- NEW LINE 2: When was it archived?
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    # ✅ relationship
+    # relationship
     questions = db.relationship('Question', backref='exam', cascade="all, delete-orphan")
 
 class Question(db.Model):
