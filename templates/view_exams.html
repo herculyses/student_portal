@@ -1,33 +1,9 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>View Exams</title>
+{% extends "base.html" %}
+{% block title %}View Exams{% endblock %}
 
-{% with messages = get_flashed_messages(with_categories=true) %}
-{% if messages %}
-    {% for category, message in messages %}
-        <div class="alert alert-{{ category }}">
-            {{ message }}
-        </div>
-    {% endfor %}
-{% endif %}
-{% endwith %}
-
-<link rel="icon" type="image/png"
-      href="{{ url_for('static', filename='favicon.png') }}">
-
-<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
-
-<script>
-if (localStorage.getItem("darkMode") === "true") {
-    document.documentElement.classList.add("dark-mode");
-}
-</script>
-
+{% block extra_css %}
 <style>
+
 .dark-mode {
     background-color: #121212 !important;
     color: #e0e0e0 !important;
@@ -66,22 +42,23 @@ if (localStorage.getItem("darkMode") === "true") {
     transform: translateY(-4px);
     box-shadow: 0 .5rem 1rem rgba(0,0,0,.15);
 }
-</style>
 
-<style>
+
 .exam-card { transition: all 0.75s cubic-bezier(0.34, 1.56, 0.64, 1) !important; will-change: transform, opacity, max-height; }
 .exam-card.exiting { transform: translateX(180px) scale(0.75) rotate(3deg) !important; opacity:0 !important; max-height:0 !important; margin:0 !important; padding:0 !important; overflow:hidden !important; border:0 !important; filter: blur(4px); }
 .exam-card.entering { animation: seamlessEnter 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); }
 @keyframes seamlessEnter { 0% { transform: translateY(50px) scale(0.8); opacity:0; } 60% { transform: translateY(-10px) scale(1.03); } 100% { transform: translateY(0) scale(1); opacity:1; } }
-</style>
 
-</head>
-<body class="bg-light">
+</style>
+{% endblock %}
+
+{% block content %}
+
 <div class="container py-4">
     <!-- HEADER -->
     <div class="d-flex justify-content-between align-items-center mb-4">
         <h2>
-            <i class="bi bi-file-earmark-text"></i> View Exams
+            <i class="bi bi-file-earmark-text"></i> View Exams <span id="examCount" class="badge bg-primary live-count ms-2">{{ exams|length }}</span>
         </h2>
         <div class="d-flex gap-2">
 
@@ -98,6 +75,13 @@ if (localStorage.getItem("darkMode") === "true") {
                class="btn btn-success">
                 <i class="bi bi-check2-square"></i>
                 Finished Exams
+            </a>
+
+            <!-- SECURITY LOGS -->
+            <a href="{{ url_for('security_logs') }}"
+               class="btn btn-danger">
+                <i class="bi bi-shield-exclamation"></i>
+                Live Security Logs
             </a>
 
             <!-- BACK -->
@@ -808,9 +792,79 @@ if (localStorage.getItem("darkMode") === "true") {
 <!-- ============================================ -->
 <!-- ================= SCRIPTS ================== -->
 <!-- ============================================ -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 
+
+
+
+
+
+<!-- AUTO OPEN CREATE EXAM MODAL + AUTO SELECT SUBJECT -->
+
+
+
+
+<! ============================================>
+<! ============👇 Reset Feature==============>
+<! ============================================>
+
+
+<!-- ============================================ -->
+<!-- =============== LIVE TOAST ================= -->
+<!-- ============================================ -->
+
+<div class="toast-container position-fixed bottom-0 end-0 p-3">
+
+    <div id="liveToast"
+         class="toast align-items-center text-bg-success border-0"
+         role="alert">
+
+        <div class="d-flex">
+
+            <div class="toast-body" id="toastMessage">
+                Success
+            </div>
+
+            <button
+                type="button"
+                class="btn-close btn-close-white me-2 m-auto"
+                data-bs-dismiss="toast">
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+
+<!-- END EXAM CONFIRMATION MODAL - FIXED -->
+<div class="modal fade" id="endExamModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title"><i class="bi bi-exclamation-triangle-fill"></i> End Exam?</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body p-4">
+        <p class="fs-6">Are you sure you want to end <strong id="endExamTitle" class="text-danger">this exam</strong>?</p>
+        <div class="alert alert-warning d-flex align-items-start mb-0">
+          <i class="bi bi-info-circle-fill me-2 mt-1"></i>
+          <div class="small">Students will no longer be able to take this exam. It will be moved to <strong>Finished Exams</strong> page. You can start it again later.</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle"></i> Cancel</button>
+        <button type="button" class="btn btn-danger" id="confirmEndExamBtn"><i class="bi bi-stop-circle"></i> Continue - End Exam</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
 <script>
+
 function setDeleteExam(id, title) {
 
     console.log("DELETE EXAM ID:", id);
@@ -825,9 +879,9 @@ function setDeleteExam(id, title) {
         document.getElementById("deleteForm").action
     );
 }
-</script>
 
-<script>
+
+
 const adminStream = new EventSource("/stream/admin");
 
 adminStream.onopen = function () {
@@ -1398,10 +1452,9 @@ function approveRequest(accessId) {
         console.error("APPROVE ERROR:", error);
     });
 }
-</script>
 
-<!-- AUTO OPEN CREATE EXAM MODAL + AUTO SELECT SUBJECT -->
-<script>
+
+
 document.addEventListener("DOMContentLoaded", function () {
 
     const params = new URLSearchParams(window.location.search);
@@ -1434,9 +1487,9 @@ document.addEventListener("DOMContentLoaded", function () {
     }
 
 });
-</script>
 
-<script>
+
+
 document.addEventListener("DOMContentLoaded", function () {
 
     const searchInput = document.getElementById("subjectSearch");
@@ -1510,12 +1563,9 @@ document.addEventListener("DOMContentLoaded", function () {
     });
 
 });
-</script>
 
-<! ============================================>
-<! ============👇 Reset Feature==============>
-<! ============================================>
-<script>
+
+
 function recycleExam(examId, studentId) {
 
     const toastElement = document.getElementById("liveToast");
@@ -1899,67 +1949,8 @@ function forceSubmit(examId, studentId) {
     });
 
 }
+
 </script>
-
-<!-- ============================================ -->
-<!-- =============== LIVE TOAST ================= -->
-<!-- ============================================ -->
-
-<div class="toast-container position-fixed bottom-0 end-0 p-3">
-
-    <div id="liveToast"
-         class="toast align-items-center text-bg-success border-0"
-         role="alert">
-
-        <div class="d-flex">
-
-            <div class="toast-body" id="toastMessage">
-                Success
-            </div>
-
-            <button
-                type="button"
-                class="btn-close btn-close-white me-2 m-auto"
-                data-bs-dismiss="toast">
-            </button>
-
-        </div>
-
-    </div>
-
-</div>
-
-
-<!-- END EXAM CONFIRMATION MODAL - FIXED -->
-<div class="modal fade" id="endExamModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content border-0 shadow-lg">
-      <div class="modal-header bg-danger text-white">
-        <h5 class="modal-title"><i class="bi bi-exclamation-triangle-fill"></i> End Exam?</h5>
-        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body p-4">
-        <p class="fs-6">Are you sure you want to end <strong id="endExamTitle" class="text-danger">this exam</strong>?</p>
-        <div class="alert alert-warning d-flex align-items-start mb-0">
-          <i class="bi bi-info-circle-fill me-2 mt-1"></i>
-          <div class="small">Students will no longer be able to take this exam. It will be moved to <strong>Finished Exams</strong> page. You can start it again later.</div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal"><i class="bi bi-x-circle"></i> Cancel</button>
-        <button type="button" class="btn btn-danger" id="confirmEndExamBtn"><i class="bi bi-stop-circle"></i> Continue - End Exam</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index: 9999;">
-    <div id="liveToast" class="toast align-items-center text-bg-success border-0" role="alert">
-        <div class="d-flex"><div class="toast-body" id="toastMessage">Success</div><button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button></div>
-    </div>
-</div>
-
-
 <script>
 // === FIXED: Card ONLY disappears after Continue is pressed ===
 document.addEventListener('DOMContentLoaded', ()=>{
@@ -2012,9 +2003,10 @@ document.addEventListener('DOMContentLoaded', ()=>{
         if(!data.success) throw new Error('Server failed');
         if(bsModal) bsModal.hide();
         // NOW we animate out - only after Continue
+        broadcastMove('end', selectedExamId, data.title);
         selectedCard.classList.add('exiting');
         setTimeout(()=>{
-          selectedCard.remove();
+          selectedCard.remove(); updateLiveCount();
           toast(`📦 "${data.title}" moved to Finished Exams`, 'warning');
           if(document.querySelectorAll('.exam-card').length===0){
             document.querySelector('.container').insertAdjacentHTML('beforeend', `<div class="text-center py-5 exam-card entering"><h5 class="text-muted">No active exams — all finished! 🎉</h5><a href="/finished-exams" class="btn btn-primary mt-3"><i class="bi bi-check2-square"></i> Go to Finished Exams</a></div>`);
@@ -2042,7 +2034,127 @@ document.addEventListener('DOMContentLoaded', ()=>{
     });
   }
 });
-</script>
 
-</body>
-</html>
+
+
+// === CROSS-PAGE AUTO-APPEAR SYSTEM ===
+const examChannel = new BroadcastChannel('exam_moves');
+
+// Listen for moves from other pages
+examChannel.onmessage = async (e) => {
+    const data = e.data;
+    console.log('Received broadcast', data);
+    const currentPage = window.location.pathname;
+    const existingCard = document.getElementById(`exam-card-${data.exam_id}`);
+    if(existingCard) return; // already here
+
+    // If this page should show the incoming exam
+    let shouldAppear = false;
+    if(data.action === 'end' && currentPage.includes('finished-exams')) shouldAppear = true;
+    if(data.action === 'archive' && currentPage.includes('archived-exams')) shouldAppear = true;
+    if(data.action === 'restore' && currentPage.includes('finished-exams')) shouldAppear = true;
+    if(data.action === 'start' && currentPage.includes('view-exams')) shouldAppear = true;
+
+    if(!shouldAppear) return;
+
+    // Fetch exam details and create card
+    try{
+        const res = await fetch(`/api/exam/${data.exam_id}/card`);
+        const exam = await res.json();
+        createIncomingCard(exam, data.action);
+    }catch(err){ console.error(err); }
+};
+
+function createIncomingCard(exam, action){
+    const container = document.querySelector('.container');
+    if(!container) return;
+    
+    let badge = '', badgeClass='', buttons='';
+    if(action === 'end' || action === 'restore'){
+        badge = 'Finished'; badgeClass='bg-warning text-dark';
+        buttons = `
+            <button class="btn btn-warning btn-sm js-start-exam" data-exam-id="${exam.id}"><i class="bi bi-play-circle"></i> Start Exam</button>
+            <button class="btn btn-secondary btn-sm js-archive-exam" data-exam-id="${exam.id}"><i class="bi bi-archive"></i> Archive</button>
+        `;
+    } else if(action === 'archive'){
+        badge = 'Archived'; badgeClass='bg-secondary';
+        buttons = `<button class="btn btn-success btn-sm js-restore-exam" data-exam-id="${exam.id}"><i class="bi bi-arrow-counterclockwise"></i> Restore</button>`;
+    } else if(action === 'start'){
+        badge = 'Active'; badgeClass='bg-success';
+        buttons = `<button class="btn btn-danger btn-sm js-end-exam" data-exam-id="${exam.id}"><i class="bi bi-stop-circle"></i> End Exam</button>`;
+    }
+
+    const html = `
+    <div class="card shadow-sm mb-4 exam-card entering" id="exam-card-${exam.id}" data-exam-id="${exam.id}" style="border-left: 5px solid #0d6efd;">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-start mb-2">
+                <div>
+                    <h4 class="mb-1">${exam.title} <span class="badge ${badgeClass} ms-2">${badge} • New!</span></h4>
+                    <p class="text-muted mb-1">${exam.subject_code} - ${exam.subject_name}</p>
+                    <small class="text-muted"><strong>Term:</strong> ${exam.term} | <strong>Type:</strong> ${exam.exam_type} | <strong>Duration:</strong> ${exam.duration} mins | <strong>Questions:</strong> ${exam.question_count}</small>
+                </div>
+            </div>
+            <div class="d-flex flex-wrap gap-2 mb-2">${buttons}</div>
+            ${exam.description ? `<p class="text-muted small">${exam.description}</p>` : ''}
+        </div>
+    </div>`;
+
+    // Insert at top with highlight
+    const firstCard = document.querySelector('.exam-card');
+    if(firstCard) firstCard.insertAdjacentHTML('beforebegin', html);
+    else {
+        // Remove empty message
+        const empty = document.querySelector('.text-center.py-5');
+        if(empty) empty.remove();
+        container.insertAdjacentHTML('beforeend', html);
+    }
+
+    // Toast
+    const el=document.getElementById('liveToast'); const m=document.getElementById('toastMessage');
+    if(el && m){
+        m.textContent=`✨ "${exam.title}" just arrived here automatically!`;
+        el.className='toast align-items-center border-0 text-bg-primary';
+        new bootstrap.Toast(el,{delay:4000}).show();
+    }
+    
+    // Remove New badge after 5 sec
+    setTimeout(()=>{
+        const badgeEl = document.querySelector(`#exam-card-${exam.id} .badge`);
+        if(badgeEl) badgeEl.textContent = badge;
+    },5000);
+}
+
+// When we move an exam, broadcast to other tabs
+function broadcastMove(action, exam_id, title){
+    examChannel.postMessage({action, exam_id, title, timestamp: Date.now()});
+    // Also save to localStorage for same-tab navigation later
+    localStorage.setItem('last_exam_move', JSON.stringify({action, exam_id, title, timestamp: Date.now()}));
+}
+
+
+
+function updateLiveCount(){
+    const countEl = document.getElementById('examCount');
+    const cards = document.querySelectorAll('.exam-card');
+    const count = cards.length;
+    if(countEl){
+        countEl.textContent = count;
+        countEl.classList.add('bump');
+        setTimeout(()=>countEl.classList.remove('bump'), 400);
+    }
+    // Handle empty message
+    const emptyMsg=document.getElementById('emptyMessage');
+    const container=document.querySelector('.container');
+    if(count===0 && !emptyMsg && container){
+        let msg='<div id="emptyMessage" class="text-center py-5 exam-card entering"><h5 class="text-muted">No exams here ✨</h5></div>';
+        const page=window.location.pathname;
+        if(page.includes('view-exams')) msg='<div id="emptyMessage" class="text-center py-5 exam-card entering"><h5 class="text-muted">No active exams — all finished! 🎉</h5><a href="/finished-exams" class="btn btn-primary mt-3">Go to Finished Exams</a></div>';
+        else if(page.includes('finished-exams')) msg='<div id="emptyMessage" class="text-center py-5 exam-card entering"><h5 class="text-muted">No finished exams</h5><a href="/view-exams" class="btn btn-primary mt-2">Active</a> <a href="/archived-exams" class="btn btn-secondary mt-2">Archived</a></div>';
+        else if(page.includes('archived-exams')) msg='<div id="emptyMessage" class="text-center py-5 exam-card entering"><h5 class="text-muted">No archived exams 📦</h5><a href="/finished-exams" class="btn btn-primary mt-2">Finished</a></div>';
+        container.insertAdjacentHTML('beforeend', msg);
+    } else if(count>0 && emptyMsg){ emptyMsg.remove(); }
+}
+document.addEventListener('DOMContentLoaded', updateLiveCount);
+
+</script>
+{% endblock %}

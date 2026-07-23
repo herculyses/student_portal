@@ -1891,8 +1891,117 @@ def finished_exams():
     return render_template("finished_exams.html", exams=exams, exam_students=exam_students, access_map=access_map, score_map=score_map, exam_summary=exam_summary, subjects=subjects)
 
 # =========================================================
-# ARCHIVED EXAMS - New Page
+# EXPORT EXAM SCORES - FIXED FOR VARCHAR student_id + reserved "user" table
 # =========================================================
+@app.route('/export-scores/<int:exam_id>')
+@app.route('/export-exam-scores/<int:exam_id>')
+@login_required(role=['Admin', 'Instructor'])
+def export_exam_scores(exam_id):
+    from flask import Response
+    import csv, io
+    from sqlalchemy import text
+
+    exam = Exam.query.get_or_404(exam_id)
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow([f"Exam: {exam.title}"])
+    writer.writerow([f"Subject: {exam.subject.subject_code if exam.subject else ''} - {exam.subject.subject_name if exam.subject else ''}"])
+    writer.writerow([f"Term: {exam.term} | Type: {exam.exam_type} | Duration: {exam.duration_minutes} mins"])
+    writer.writerow([])
+    writer.writerow(['#', 'Student ID', 'Student Name', 'Section', 'Year', 'Score', 'Total Points', 'Percentage', 'Status', 'Submitted At'])
+
+    total_points = 0
+    try:
+        total_points = sum(q.points for q in exam.questions) if exam.questions else 0
+    except:
+        pass
+    if total_points == 0:
+        total_points = 100
+
+    # === CORRECT QUERY FOR YOUR SCHEMA ===
+    # Student.student_id (STRING) = ExamAttempt.student_id (STRING)
+    # ExamAttempt holds score and submitted_at
+    # Student holds name, section, year
+
+    try:
+        # Use ORM for reliability - no raw SQL type issues
+        attempts = (
+            ExamAttempt.query
+            .filter_by(exam_id=exam_id, is_submitted=True)
+            .order_by(ExamAttempt.submitted_at.desc())
+            .all()
+        )
+
+        count = 0
+        for idx, attempt in enumerate(attempts, 1):
+            count += 1
+            # Get student record - there may be multiple student rows with same student_id but different subject
+            # We want the one matching exam's subject_code if possible
+            student_q = Student.query.filter_by(student_id=attempt.student_id)
+            if exam.subject:
+                student_match = student_q.filter_by(subject_code=exam.subject.subject_code).first()
+                if not student_match:
+                    student_match = student_q.first()
+            else:
+                student_match = student_q.first()
+
+            if student_match:
+                student_name = student_match.name
+                section = student_match.section or ""
+                year = student_match.year or ""
+                student_id_str = student_match.student_id
+            else:
+                student_name = f"Student {attempt.student_id}"
+                section = ""
+                year = ""
+                student_id_str = attempt.student_id
+
+            score = attempt.score or 0
+            perc = round((score / total_points * 100) if total_points else 0, 2)
+            status = "Passed" if perc >= 75 else "Failed"
+            submitted = attempt.submitted_at.strftime("%Y-%m-%d %I:%M %p") if attempt.submitted_at else ""
+
+            writer.writerow([idx, student_id_str, student_name, section, year, score, total_points, f"{perc}%", status, submitted])
+
+        if count == 0:
+            # Try also including non-submitted but with score, or check ExamAccess for pending
+            writer.writerow(['No submitted attempts yet. Checking all access records...'])
+            accesses = ExamAccess.query.filter_by(exam_id=exam_id).all()
+            if accesses:
+                for idx, acc in enumerate(accesses, 1):
+                    student = Student.query.filter_by(student_id=acc.student_id).first()
+                    name = student.name if student else acc.student_id
+                    sec = student.section if student else ""
+                    yr = student.year if student else ""
+                    # Try to find attempt even if not submitted
+                    att = ExamAttempt.query.filter_by(student_id=acc.student_id, exam_id=exam_id).order_by(ExamAttempt.id.desc()).first()
+                    score = att.score if att and att.score is not None else 0
+                    perc = round((score / total_points * 100) if total_points else 0, 2)
+                    submitted = att.submitted_at.strftime("%Y-%m-%d %I:%M %p") if att and att.submitted_at else acc.status
+                    writer.writerow([idx, acc.student_id, name, sec, yr, score, total_points, f"{perc}%", acc.status, submitted])
+            else:
+                writer.writerow(['No students have taken this exam yet - No ExamAccess records'])
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        writer.writerow([f"Error: {str(e)}"])
+        try:
+            db.session.rollback()
+        except:
+            pass
+
+    output.seek(0)
+    return Response(
+        output.getvalue(),
+        mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename={exam.title.replace(" ", "_")}_Scores.csv'}
+    )
+
+# ===========================
+# ARCHIVED EXAMS - New Page
+# ===========================
 @app.route("/archived-exams")
 @login_required(role=["Admin", "Instructor"])
 def archived_exams():
@@ -1906,6 +2015,29 @@ def archived_exams():
         exam_students[exam.id] = []
         exam_summary[exam.id] = {"requested":0,"pending":0,"approved":0,"completed":0,"rejected":0,"forced_submit":0,"passed":0,"failed":0,"average":0,"highest":0}
     return render_template("archived_exams.html", exams=exams, exam_students=exam_students, access_map=access_map, score_map=score_map, exam_summary=exam_summary, subjects=subjects)
+
+# ===========================
+# API of Exam Card
+# ===========================
+@app.route('/api/exam/<int:exam_id>/card')
+@login_required(role=['Admin', 'Instructor'])
+def api_exam_card(exam_id):
+    exam = Exam.query.get_or_404(exam_id)
+    total_points = sum(q.points for q in exam.questions)
+    return jsonify({
+        "id": exam.id,
+        "title": exam.title,
+        "subject_code": exam.subject.subject_code if exam.subject else "",
+        "subject_name": exam.subject.subject_name if exam.subject else "",
+        "term": exam.term or "No Term",
+        "exam_type": exam.exam_type or "No Type",
+        "duration": exam.duration_minutes,
+        "is_active": exam.is_active,
+        "is_archived": exam.is_archived,
+        "description": exam.description or "",
+        "total_points": total_points,
+        "question_count": len(exam.questions)
+    })
 
 # =========================================================
 # START / END / ARCHIVE / RESTORE - Seamless (no refresh)
@@ -3235,132 +3367,237 @@ def review_answers(exam_id):
 
     return jsonify(review_data)
 
-# ==========================================================
-# SECURITY MODULE
-# ==========================================================
-
+# =========================================================
+# LIVE SECURITY LOGS - FIXED to use ORIGINAL URL
+# =========================================================
 @app.route('/log-security-event', methods=['POST'])
 @login_required(role=['Admin', 'Instructor', 'Student'])
 def log_security_event():
-
     attempt = ExamAttempt.query.get(session.get('attempt_id'))
-
     if not attempt:
-        return jsonify({
-            "success": False
-        }), 404
-
+        return jsonify({"success": False}), 404
     data = request.get_json()
-
     event = data.get("event")
-
     config = SECURITY_EVENTS.get(event)
-
-    # ----------------------------------------------------------
-    # Look up the event configuration
-    # ----------------------------------------------------------
-
-    config = SECURITY_EVENTS.get(event)
-
     if not config:
-
-        return jsonify({
-            "success": False,
-            "message": "Unknown security event."
-        }), 400
-
-
-    # ----------------------------------------------------------
-    # Save the security event
-    # ----------------------------------------------------------
+        return jsonify({"success": False}), 400
 
     security_event = SecurityEvent(
-
         attempt_id=attempt.id,
-
         event_type=event,
-
         description=config["description"],
-
         severity=config["severity"],
-
         penalty=config["penalty"],
-
         source=config["source"]
-
     )
-
     db.session.add(security_event)
-
-
-    # ----------------------------------------------------------
-    # Update the exam security summary
-    # ----------------------------------------------------------
-
     attempt.security_score -= config["penalty"]
-
-    print("=" * 50)
-    print("SECURITY EVENT:", event)
-    print("Penalty:", config["penalty"])
-    print("Remaining Security Score:", attempt.security_score)
-    print("=" * 50)
-
     attempt.total_violations += 1
     attempt.last_violation = datetime.utcnow()
     attempt.last_violation_type = event
-
     if attempt.security_score < 0:
         attempt.security_score = 0
-
     db.session.commit()
 
-    # ==========================================================
-    # SECURITY THRESHOLD ENGINE
-    # ==========================================================
+    all_events = SecurityEvent.query.filter_by(attempt_id=attempt.id).all()
+    highest_type = event
+    highest_penalty = config["penalty"]
+    for ev in all_events:
+        if ev.penalty > highest_penalty:
+            highest_penalty = ev.penalty
+            highest_type = ev.event_type
+
+    student = Student.query.filter_by(student_id=attempt.student_id).first()
+    exam = Exam.query.get(attempt.exam_id)
+
+    if "admin" not in sse_events:
+        sse_events["admin"] = []
+    # FIX: include exam_id correctly so it goes to correct exam card
+    sse_events["admin"].append({
+        "event": "security_violation",
+        "data": {
+            "attempt_id": attempt.id,
+            "exam_id": attempt.exam_id,
+            "event_id": security_event.id,
+            "student_id": attempt.student_id,
+            "student_name": student.name if student else attempt.student_id,
+            "section": student.section if student else "",
+            "exam_title": exam.title if exam else f"Exam {attempt.exam_id}",
+            "event_type": event,
+            "penalty": config["penalty"],
+            "severity": config["severity"],
+            "security_score": attempt.security_score,
+            "total_violations": attempt.total_violations,
+            "highest_penalty_type": highest_type,
+            "occurred_at": security_event.occurred_at.strftime("%I:%M:%S %p")
+        }
+    })
 
     warning = None
     force_submit = False
-
-    # -------------------------
-    # Forced Submission
-    # -------------------------
     if attempt.security_score <= 0:
-
-        attempt.security_score = 0
-
         warning = "forced"
-
         force_submit = True
-
-    # -------------------------
-    # Critical Warning
-    # -------------------------
     elif attempt.security_score <= 40:
-
         warning = "critical"
-
-    # -------------------------
-    # Warning
-    # -------------------------
     elif attempt.security_score <= 70:
-
         warning = "warning"
 
-    # ==========================================================
-    # RESPONSE
-    # ==========================================================
-
     return jsonify({
-
         "success": True,
-
         "security_score": attempt.security_score,
-
         "warning": warning,
-
         "force_submit": force_submit
+    })
 
-})
+# =========================================================
+# SECURITY LOGS - CARD LAYOUT BY EXAM + EXPORT + ARCHIVED
+# =========================================================
+@app.route('/security-logs')
+@login_required(role=['Admin', 'Instructor'])
+def security_logs():
+    # Only ACTIVE exams that are being taken
+    active_attempts = ExamAttempt.query.filter_by(is_submitted=False).all()
+    # Group by exam_id
+    from collections import defaultdict
+    grouped = defaultdict(list)
+    for attempt in active_attempts:
+        grouped[attempt.exam_id].append(attempt)
+
+    exams_data = []
+    total_monitored = len(active_attempts)
+    total_events = 0
+
+    for exam_id, attempts in grouped.items():
+        exam = Exam.query.get(exam_id)
+        if not exam or exam.is_archived:
+            continue
+        students = []
+        cheating_count = 0
+        for attempt in attempts:
+            student = Student.query.filter_by(student_id=attempt.student_id).first()
+            events = SecurityEvent.query.filter_by(attempt_id=attempt.id).all()
+            counts = {
+                'TAB_SWITCH': 0, 'RIGHT_CLICK': 0, 'TEXT_SELECTION': 0,
+                'COPY': 0, 'PASTE': 0, 'CUT': 0,
+                'F12': 0, 'CTRL_U': 0, 'CTRL_SHIFT_I': 0, 'FULLSCREEN_EXIT': 0
+            }
+            for ev in events:
+                if ev.event_type in counts:
+                    counts[ev.event_type] += 1
+            highest_type = None
+            highest_pen = -1
+            for ev in events:
+                if ev.penalty > highest_pen:
+                    highest_pen = ev.penalty
+                    highest_type = ev.event_type
+            if attempt.security_score < 100:
+                cheating_count += 1
+            total_events += len(events)
+            students.append({
+                'attempt_id': attempt.id,
+                'student_id': attempt.student_id,
+                'student_name': student.name if student else attempt.student_id,
+                'section': student.section if student else "",
+                'security_score': attempt.security_score,
+                'total_violations': attempt.total_violations,
+                'last_violation_type': attempt.last_violation_type,
+                'highest_penalty_type': highest_type,
+                'last_occurred': attempt.last_violation.strftime("%I:%M %p") if attempt.last_violation else "Just now",
+                'counts': counts,
+                'raw_events': events
+            })
+        exams_data.append({
+            'exam': exam,
+            'students': students,
+            'cheating_count': cheating_count
+        })
+
+    return render_template('security_logs.html',
+        exams_data=exams_data,
+        total_monitored=total_monitored,
+        total_events=total_events
+    )
+
+@app.route('/security-logs-archived')
+@login_required(role=['Admin', 'Instructor'])
+def archived_security_logs():
+    exams = Exam.query.filter_by(is_archived=True).order_by(Exam.archived_at.desc()).all()
+    exam_groups = []
+    for exam in exams:
+        attempts = ExamAttempt.query.filter_by(exam_id=exam.id).all()
+        if not attempts:
+            continue
+        students_data = []
+        for attempt in attempts:
+            if attempt.total_violations == 0:
+                continue
+            student = Student.query.filter_by(student_id=attempt.student_id).first()
+            events = SecurityEvent.query.filter_by(attempt_id=attempt.id).order_by(SecurityEvent.occurred_at.desc()).all()
+            highest_type = None
+            highest_pen = -1
+            for ev in events:
+                if ev.penalty > highest_pen:
+                    highest_pen = ev.penalty
+                    highest_type = ev.event_type
+            counts = {
+                'TAB_SWITCH': 0, 'RIGHT_CLICK': 0, 'TEXT_SELECTION': 0,
+                'COPY': 0, 'PASTE': 0, 'CUT': 0,
+                'F12': 0, 'CTRL_U': 0, 'CTRL_SHIFT_I': 0, 'FULLSCREEN_EXIT': 0
+            }
+            for ev in events:
+                if ev.event_type in counts:
+                    counts[ev.event_type] += 1
+            students_data.append({
+                'attempt_id': attempt.id,
+                'student_id': attempt.student_id,
+                'student_name': student.name if student else attempt.student_id,
+                'section': student.section if student else "",
+                'security_score': attempt.security_score,
+                'total_violations': attempt.total_violations,
+                'last_violation_type': attempt.last_violation_type,
+                'last_occurred': attempt.last_violation.strftime("%I:%M %p") if attempt.last_violation else "",
+                'highest_penalty_type': highest_type,
+                'counts': counts
+            })
+        if students_data:
+            exam_groups.append({'exam': exam, 'students': students_data})
+    return render_template('security_logs_archived.html', exam_groups=exam_groups)
+
+@app.route('/export-security-logs/<int:exam_id>')
+@app.route('/export-security-logs-archived/<int:exam_id>')
+@login_required(role=['Admin', 'Instructor'])
+def export_security_logs(exam_id):
+    from flask import Response
+    import csv, io
+    exam = Exam.query.get_or_404(exam_id)
+    attempts = ExamAttempt.query.filter_by(exam_id=exam_id).all()
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([f"Security Logs - Exam: {exam.title}"])
+    writer.writerow([f"Subject: {exam.subject.subject_code if exam.subject else ''} - {exam.subject.subject_name if exam.subject else ''}"])
+    writer.writerow([f"Exported: {datetime.utcnow().strftime('%Y-%m-%d %I:%M %p')}"])
+    writer.writerow([])
+    writer.writerow(['#', 'Student ID', 'Student Name', 'Section', 'Security Score', 'Total Violations', 'Last Violation Type', 'Highest Penalty Type', 'TAB', 'R-Click', 'Select', 'Copy', 'Paste', 'Cut', 'F12', 'Ctrl+U', 'Ctrl+Shift+I', 'FullScr', 'Last Occurred'])
+    for idx, attempt in enumerate(attempts, 1):
+        student = Student.query.filter_by(student_id=attempt.student_id).first()
+        events = SecurityEvent.query.filter_by(attempt_id=attempt.id).all()
+        counts = {k:0 for k in ['TAB_SWITCH','RIGHT_CLICK','TEXT_SELECTION','COPY','PASTE','CUT','F12','CTRL_U','CTRL_SHIFT_I','FULLSCREEN_EXIT']}
+        for ev in events:
+            if ev.event_type in counts:
+                counts[ev.event_type] += 1
+        highest = max(events, key=lambda x: x.penalty).event_type if events else "None"
+        writer.writerow([
+            idx, attempt.student_id, student.name if student else attempt.student_id,
+            student.section if student else "", attempt.security_score,
+            attempt.total_violations, attempt.last_violation_type or "None", highest,
+            counts['TAB_SWITCH'], counts['RIGHT_CLICK'], counts['TEXT_SELECTION'], counts['COPY'], counts['PASTE'],
+            counts['CUT'], counts['F12'], counts['CTRL_U'], counts['CTRL_SHIFT_I'], counts['FULLSCREEN_EXIT'],
+            attempt.last_violation.strftime("%Y-%m-%d %I:%M %p") if attempt.last_violation else ""
+        ])
+    output.seek(0)
+    return Response(output.getvalue(), mimetype='text/csv',
+        headers={'Content-Disposition': f'attachment; filename={exam.title.replace(" ","_")}_Security_Logs.csv'})
 
 # =========================================================
 # 6. 👨‍🏫 ADMIN EXAM CONTROL
