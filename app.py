@@ -1783,405 +1783,186 @@ def create_exam():
     return redirect(url_for('add_question', exam_id=exam.id))
 
 # =========================================================
-# 👁️👁️ VIEW EXAMS and EXAM MONITORING CENTER
+# EDIT EXAM - You accidentally deleted this, let's put it back
 # =========================================================
-@app.route('/view-exams')
-@login_required(role=['Admin', 'Instructor'])
-def view_exams():
-
-    print("===== VIEW_EXAMS ROUTE HIT =====")
-
-    subjects = Subject.query.all()
-
-    exams = Exam.query.order_by(
-        Exam.created_at.desc()
-    ).all()
-
-    access_records = ExamAccess.query.all()
-
-    for a in access_records:
-        print(
-            "ACCESS:",
-            a.student_id,
-            a.exam_id,
-            a.status
-        )
-
-    access_map = {
-        (a.student_id, a.exam_id): a
-        for a in ExamAccess.query.filter(
-            ExamAccess.status != "not_requested"
-        ).all()
-    }
-
-    exam_students = {}
-    score_map = {}
-    exam_summary = {}
-
-    for exam in exams:
-
-        students = (
-            db.session.query(Student)
-            .join(
-                ExamAccess,
-                Student.student_id == ExamAccess.student_id
-            )
-            .filter(
-                ExamAccess.exam_id == exam.id,
-                Student.subject_code == exam.subject.subject_code,
-                ExamAccess.status != "not_requested"
-            )
-            .distinct()
-            .all()
-        )
-
-        exam_students[exam.id] = students
-
-        # ===========================
-        # BUILD SUMMARY
-        # ===========================
-
-        summary = {
-            "requested": len(students),
-            "pending": 0,
-            "approved": 0,
-            "completed": 0,
-            "rejected": 0,
-            "forced_submit": 0,
-            "passed": 0,
-            "failed": 0,
-            "average": 0,
-            "highest": 0
-        }
-
-        percentages = []
-
-        for student in students:
-
-            access = access_map.get(
-                (student.student_id, exam.id)
-            )
-
-            if access:
-
-                if access.status == "pending":
-                    summary["pending"] += 1
-
-                elif access.status == "approved":
-                    summary["approved"] += 1
-
-                elif access.status == "completed":
-                    summary["completed"] += 1
-
-                elif access.status == "rejected":
-                    summary["rejected"] += 1
-
-                elif access.status == "forced_submit":
-                    summary["forced_submit"] += 1
-
-        # ===========================
-        # BUILD SCORE MAP
-        # ===========================
-        total_points = sum(
-            question.points
-            for question in exam.questions
-        )
-
-        for student in students:
-
-            attempt = (
-                ExamAttempt.query
-                .filter_by(
-                    student_id=student.student_id,
-                    exam_id=exam.id
-                )
-                .order_by(ExamAttempt.id.desc())
-                .first()
-            )
-
-            active_attempt = (
-                attempt is not None and
-                not attempt.is_submitted
-            )
-
-            score_map[(student.student_id, exam.id)] = {
-                "attempt": attempt,
-                "is_active_attempt": active_attempt,
-                "score": attempt.score if attempt else None,
-                "total": total_points,
-                "percentage": (
-                    round((attempt.score / total_points) * 100)
-                    if attempt and total_points > 0
-                    else None
-                ),
-                "submitted_at": (
-                    attempt.submitted_at + timedelta(hours=8)
-                    if attempt and attempt.submitted_at
-                    else None
-                )
-
-            }
-
-            # ===========================
-            # UPDATE SUMMARY
-            # ===========================
-
-            score = score_map[(student.student_id, exam.id)]
-
-            if score["percentage"] is not None:
-
-                percentages.append(score["percentage"])
-
-                if score["percentage"] >= 70:
-                    summary["passed"] += 1
-                else:
-                    summary["failed"] += 1
-
-            if percentages:
-
-                summary["average"] = round(
-                    sum(percentages) / len(percentages),
-                    1
-                )
-
-                summary["highest"] = max(percentages)
-
-        exam_summary[exam.id] = summary
-
-    return render_template(
-        'view_exams.html',
-        exams=exams,
-        exam_students=exam_students,
-        access_map=access_map,
-        score_map=score_map,
-        exam_summary=exam_summary,
-        subjects=subjects
-    )
-
-# =========================
-# Finished Exam Route
-# =========================
-@app.route("/finished-exams")
-@login_required(role=["Admin", "Instructor"])
-def finished_exams():
-
-    print("===== FINISHED_EXAMS ROUTE HIT =====")
-
-    subjects = Subject.query.all()
-
-    exams = (
-        Exam.query
-        .filter_by(is_active=False)
-        .order_by(Exam.created_at.desc())
-        .all()
-    )
-
-    access_records = ExamAccess.query.all()
-
-    access_map = {
-        (a.student_id, a.exam_id): a
-        for a in ExamAccess.query.filter(
-            ExamAccess.status != "not_requested"
-        ).all()
-    }
-
-    exam_students = {}
-    score_map = {}
-    exam_summary = {}
-
-    for exam in exams:
-
-        students = (
-            db.session.query(Student)
-            .join(
-                ExamAccess,
-                Student.student_id == ExamAccess.student_id
-            )
-            .filter(
-                ExamAccess.exam_id == exam.id,
-                Student.subject_code == exam.subject.subject_code,
-                ExamAccess.status != "not_requested"
-            )
-            .distinct()
-            .all()
-        )
-
-        exam_students[exam.id] = students
-
-        summary = {
-            "requested": len(students),
-            "pending": 0,
-            "approved": 0,
-            "completed": 0,
-            "rejected": 0,
-            "forced_submit": 0,
-            "passed": 0,
-            "failed": 0,
-            "average": 0,
-            "highest": 0
-        }
-
-        percentages = []
-
-        total_points = sum(
-            q.points
-            for q in exam.questions
-        )
-
-        for student in students:
-
-            access = access_map.get(
-                (student.student_id, exam.id)
-            )
-
-            if access:
-
-                if access.status == "pending":
-                    summary["pending"] += 1
-                elif access.status == "approved":
-                    summary["approved"] += 1
-                elif access.status == "completed":
-                    summary["completed"] += 1
-                elif access.status == "rejected":
-                    summary["rejected"] += 1
-                elif access.status == "forced_submit":
-                    summary["forced_submit"] += 1
-
-            attempt = (
-                ExamAttempt.query
-                .filter_by(
-                    student_id=student.student_id,
-                    exam_id=exam.id
-                )
-                .order_by(ExamAttempt.id.desc())
-                .first()
-            )
-
-            active_attempt = (
-                attempt is not None and
-                not attempt.is_submitted
-            )
-
-            percentage = (
-                round((attempt.score / total_points) * 100)
-                if attempt and total_points > 0
-                else None
-            )
-
-            score_map[(student.student_id, exam.id)] = {
-                "attempt": attempt,
-                "is_active_attempt": active_attempt,
-                "score": attempt.score if attempt else None,
-                "total": total_points,
-                "percentage": percentage,
-                "submitted_at": (
-                    attempt.submitted_at + timedelta(hours=8)
-                    if attempt and attempt.submitted_at
-                    else None
-                )
-            }
-
-            if percentage is not None:
-
-                percentages.append(percentage)
-
-                if percentage >= 70:
-                    summary["passed"] += 1
-                else:
-                    summary["failed"] += 1
-
-        if percentages:
-
-            summary["average"] = round(
-                sum(percentages) / len(percentages),
-                1
-            )
-
-            summary["highest"] = max(percentages)
-
-        exam_summary[exam.id] = summary
-
-    return render_template(
-        "finished_exams.html",
-        exams=exams,
-        exam_students=exam_students,
-        access_map=access_map,
-        score_map=score_map,
-        exam_summary=exam_summary,
-        subjects=subjects
-    )
-
-# =========================
-# Archived Exams
-# =========================
-
-@app.route("/archived-exams")
-@login_required(role=["Admin", "Instructor"])
-def archived_exams():
-
-    return render_template(
-        "archived_exams.html"
-    )
-
-# =========================
-# Edit Exam Route
-# =========================
 @app.route('/edit-exam/<int:exam_id>', methods=['GET', 'POST'])
 @login_required(role=['Admin', 'Instructor'])
 def edit_exam(exam_id):
-
     exam = Exam.query.get_or_404(exam_id)
     subjects = Subject.query.all()
-
     if request.method == 'POST':
-
-        exam.subject_id = request.form.get('subject_id')
         exam.title = request.form.get('title')
+        exam.subject_id = request.form.get('subject_id')
         exam.term = request.form.get('term')
         exam.exam_type = request.form.get('exam_type')
         exam.section = request.form.get('section')
         exam.year = request.form.get('year')
         exam.school_year = request.form.get('school_year')
         exam.semester = request.form.get('semester')
+        exam.access_code = request.form.get('access_code')
         exam.description = request.form.get('description')
-        exam.duration_minutes = request.form.get('duration_minutes')
-
-        file = request.files.get('questions_file')
-
-        if file and file.filename != '':
-
-            Question.query.filter_by(exam_id=exam.id).delete()
-
-            if file.filename.endswith('.csv'):
-                df = pd.read_csv(file)
-            else:
-                df = pd.read_excel(file)
-
-            for _, row in df.iterrows():
-
-                question = Question(
-                    exam_id=exam.id,
-                    question_text=row['question'],
-                    choice_a=row['choice_a'],
-                    choice_b=row['choice_b'],
-                    choice_c=row['choice_c'],
-                    choice_d=row['choice_d'],
-                    correct_answer=row['correct_answer'],
-                    points=row['points']
-                )
-
-                db.session.add(question)
-
+        exam.duration_minutes = int(request.form.get('duration_minutes') or 30)
         db.session.commit()
-
-        flash("Exam updated successfully!", "success")
+        flash('Exam updated!', 'success')
         return redirect(url_for('view_exams'))
-
     return render_template('edit_exam.html', exam=exam, subjects=subjects)
 
+# ========================
+# 👁️👁️ VIEW EXAMS
+# ========================
+@app.route('/view-exams')
+@login_required(role=['Admin', 'Instructor'])
+def view_exams():
+    subjects = Subject.query.all()
+    # Only Active AND Not Archived
+    exams = Exam.query.filter_by(is_active=True, is_archived=False).order_by(Exam.created_at.desc()).all()
+    access_records = ExamAccess.query.all()
+    access_map = {(a.student_id, a.exam_id): a for a in ExamAccess.query.filter(ExamAccess.status != "not_requested").all()}
+    exam_students = {}
+    score_map = {}
+    exam_summary = {}
+    for exam in exams:
+        students = db.session.query(Student).join(ExamAccess, Student.student_id == ExamAccess.student_id).filter(ExamAccess.exam_id == exam.id, Student.subject_code == exam.subject.subject_code, ExamAccess.status != "not_requested").distinct().all()
+        exam_students[exam.id] = students
+        summary = {"requested": len(students), "pending": 0, "approved": 0, "completed": 0, "rejected": 0, "forced_submit": 0, "passed": 0, "failed": 0, "average": 0, "highest": 0}
+        percentages = []
+        total_points = sum(q.points for q in exam.questions)
+        for student in students:
+            access = access_map.get((student.student_id, exam.id))
+            if access:
+                if access.status in summary: summary[access.status] += 1
+            attempt = ExamAttempt.query.filter_by(student_id=student.student_id, exam_id=exam.id).order_by(ExamAttempt.id.desc()).first()
+            score_map[(student.student_id, exam.id)] = {
+                "attempt": attempt,
+                "is_active_attempt": attempt is not None and not attempt.is_submitted,
+                "score": attempt.score if attempt else None,
+                "total": total_points,
+                "percentage": round((attempt.score / total_points) * 100) if attempt and total_points > 0 else None,
+                "submitted_at": attempt.submitted_at + timedelta(hours=8) if attempt and attempt.submitted_at else None
+            }
+            if score_map[(student.student_id, exam.id)]["percentage"] is not None:
+                percentages.append(score_map[(student.student_id, exam.id)]["percentage"])
+                if score_map[(student.student_id, exam.id)]["percentage"] >= 70: summary["passed"] += 1
+                else: summary["failed"] += 1
+        if percentages:
+            summary["average"] = round(sum(percentages) / len(percentages), 1)
+            summary["highest"] = max(percentages)
+        exam_summary[exam.id] = summary
+    return render_template('view_exams.html', exams=exams, exam_students=exam_students, access_map=access_map, score_map=score_map, exam_summary=exam_summary, subjects=subjects)
 
 # =========================================================
-# 3. ✏️ QUESTION MANAGEMENT
+# FINISHED EXAMS - Closed but Not Archived
+# =========================================================
+@app.route("/finished-exams")
+@login_required(role=["Admin", "Instructor"])
+def finished_exams():
+    subjects = Subject.query.all()
+    # Only Closed AND Not Archived
+    exams = Exam.query.filter_by(is_active=False, is_archived=False).order_by(Exam.created_at.desc()).all()
+    access_map = {(a.student_id, a.exam_id): a for a in ExamAccess.query.filter(ExamAccess.status != "not_requested").all()}
+    exam_students = {}
+    score_map = {}
+    exam_summary = {}
+    for exam in exams:
+        students = db.session.query(Student).join(ExamAccess, Student.student_id == ExamAccess.student_id).filter(ExamAccess.exam_id == exam.id, Student.subject_code == exam.subject.subject_code, ExamAccess.status != "not_requested").distinct().all()
+        exam_students[exam.id] = students
+        summary = {"requested": len(students), "pending": 0, "approved": 0, "completed": 0, "rejected": 0, "forced_submit": 0, "passed": 0, "failed": 0, "average": 0, "highest": 0}
+        percentages = []
+        total_points = sum(q.points for q in exam.questions)
+        for student in students:
+            access = access_map.get((student.student_id, exam.id))
+            if access and access.status in summary:
+                if access.status == "pending": summary["pending"] += 1
+                elif access.status == "approved": summary["approved"] += 1
+                elif access.status == "completed": summary["completed"] += 1
+                elif access.status == "rejected": summary["rejected"] += 1
+                elif access.status == "forced_submit": summary["forced_submit"] += 1
+            attempt = ExamAttempt.query.filter_by(student_id=student.student_id, exam_id=exam.id).order_by(ExamAttempt.id.desc()).first()
+            percentage = round((attempt.score / total_points) * 100) if attempt and total_points > 0 else None
+            score_map[(student.student_id, exam.id)] = {"attempt": attempt, "is_active_attempt": attempt is not None and not attempt.is_submitted, "score": attempt.score if attempt else None, "total": total_points, "percentage": percentage, "submitted_at": attempt.submitted_at + timedelta(hours=8) if attempt and attempt.submitted_at else None}
+            if percentage is not None:
+                percentages.append(percentage)
+                if percentage >= 70: summary["passed"] += 1
+                else: summary["failed"] += 1
+        if percentages:
+            summary["average"] = round(sum(percentages) / len(percentages), 1)
+            summary["highest"] = max(percentages)
+        exam_summary[exam.id] = summary
+    return render_template("finished_exams.html", exams=exams, exam_students=exam_students, access_map=access_map, score_map=score_map, exam_summary=exam_summary, subjects=subjects)
+
+# =========================================================
+# ARCHIVED EXAMS - New Page
+# =========================================================
+@app.route("/archived-exams")
+@login_required(role=["Admin", "Instructor"])
+def archived_exams():
+    subjects = Subject.query.all()
+    exams = Exam.query.filter_by(is_archived=True).order_by(Exam.archived_at.desc()).all()
+    exam_students = {}
+    exam_summary = {}
+    access_map = {}
+    score_map = {}
+    for exam in exams:
+        exam_students[exam.id] = []
+        exam_summary[exam.id] = {"requested":0,"pending":0,"approved":0,"completed":0,"rejected":0,"forced_submit":0,"passed":0,"failed":0,"average":0,"highest":0}
+    return render_template("archived_exams.html", exams=exams, exam_students=exam_students, access_map=access_map, score_map=score_map, exam_summary=exam_summary, subjects=subjects)
+
+# =========================================================
+# START / END / ARCHIVE / RESTORE - Seamless (no refresh)
+# =========================================================
+@app.route('/start-exam/<int:exam_id>', methods=['POST'])
+@login_required(role=['Instructor', 'Admin'])
+def admin_start_exam(exam_id):
+    exam = Exam.query.get_or_404(exam_id)
+    exam.is_active = True
+    exam.is_archived = False
+    db.session.commit()
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({"success": True, "exam_id": exam.id, "title": exam.title})
+    flash("Exam started successfully!", "success")
+    return redirect(url_for('view_exams'))
+
+@app.route('/end-exam/<int:exam_id>', methods=['POST'])
+@login_required(role=['Instructor', 'Admin'])
+def end_exam(exam_id):
+    exam = Exam.query.get_or_404(exam_id)
+    exam.is_active = False
+    db.session.commit()
+    for access in ExamAccess.query.filter_by(exam_id=exam.id).all():
+        if str(access.student_id) in sse_events:
+            sse_events[access.student_id].append({"event": "exam_ended", "data": {"exam_id": exam.id}})
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({"success": True, "exam_id": exam.id, "title": exam.title})
+    flash("Exam ended successfully!", "warning")
+    return redirect(url_for('view_exams'))
+
+@app.route('/archive-exam/<int:exam_id>', methods=['POST'])
+@login_required(role=['Instructor', 'Admin'])
+def archive_exam(exam_id):
+    exam = Exam.query.get_or_404(exam_id)
+    exam.is_archived = True
+    exam.is_active = False
+    exam.archived_at = datetime.utcnow()
+    db.session.commit()
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({"success": True, "exam_id": exam.id, "title": exam.title})
+    flash(f'Exam "{exam.title}" archived.', 'success')
+    return redirect(url_for('archived_exams'))
+
+@app.route('/restore-exam/<int:exam_id>', methods=['POST'])
+@login_required(role=['Instructor', 'Admin'])
+def restore_exam(exam_id):
+    exam = Exam.query.get_or_404(exam_id)
+    exam.is_archived = False
+    exam.archived_at = None
+    db.session.commit()
+    if request.headers.get("X-Requested-With") == "XMLHttpRequest":
+        return jsonify({"success": True, "exam_id": exam.id, "title": exam.title})
+    flash(f'Exam "{exam.title}" restored.', 'success')
+    return redirect(url_for('finished_exams'))
+
+# =========================================================
+# 3. ✏️ QUESTION MANAGEMENT - Add Question
 # =========================================================
 @app.route('/add-question/<int:exam_id>', methods=['GET', 'POST'])
 @login_required(role=['Admin', 'Instructor'])
@@ -3651,50 +3432,6 @@ def approve_request(access_id):
         })
 
     return redirect(url_for("view_exams"))
-
-# ==================================
-# Admin Starts Exam
-# ==================================
-@app.route('/start-exam/<int:exam_id>', methods=['POST'])
-@login_required(role=['Instructor', 'Admin'])
-def admin_start_exam(exam_id):
-
-    exam = Exam.query.get_or_404(exam_id)
-    exam.is_active = True
-
-    db.session.commit()
-
-    flash("Exam started successfully!", "success")
-    return redirect(url_for('view_exams'))
-
-# ==================================
-# Admin Ends Exam
-# ==================================
-@app.route('/end-exam/<int:exam_id>', methods=['POST'])
-@login_required(role=['Instructor', 'Admin'])
-def end_exam(exam_id):
-
-    exam = Exam.query.get_or_404(exam_id)
-    exam.is_active = False
-
-    db.session.commit()
-
-    # Notify all students currently connected
-
-    for access in ExamAccess.query.filter_by(exam_id=exam.id).all():
-
-        sse_events[access.student_id].append({
-
-            "event": "exam_ended",
-
-            "data": {
-                "exam_id": exam.id
-            }
-
-        })
-
-    flash("Exam ended successfully!", "warning")
-    return redirect(url_for('view_exams'))
 
 # ==================================
 # Admin Deletes Exam
